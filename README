@@ -1,0 +1,167 @@
+README fil for å gi en oversikt av hvordan programmet fungerer.
+
+Readme og selve koden er hovedsakelig produsert av OpenAI o4-mini, med aktiv prompt og filopplasning av selve koden. 
+CSV filene med dataene er ikke sendt inn i KI.
+
+OpenAI, “ChatGPT (OpenAI o4-mini),” OpenAI API, [Online]. Tilgjengelig: https://platform.openai.com. [Hentet: 1. juni 2025].
+
+
+/prosjektrot
+├── config.py                 # Generelle konfigurasjoner (filbaner, terskler)
+├── data_processing.py        # Leser og bearbeider CSV-data til DataFrames
+├── plotting.py               # Alle plot-funksjoner og dekningsgrad‐logikk
+├── building_analysis.py      # “Dykker ned” i ett bygg: valg av periode/variabel
+├── analysis.py               # “Utforsk data” på tvers av alle bygg/rom
+├── main.py                   # CLI-meny (to varianter eksisterer, én forenklet)
+└── CSV/                      # Underkatalog med rå CSV-filer
+    ├── Seklima.csv
+    ├── Kunak.csv
+    ├── data_RES01…csv        # Inneklima-filer for Bygg 01
+    ├── data_RES02…csv        # Inneklima-filer for Bygg 02
+    └── …                     # Osv. for andre bygg (04, 05, 07, 08)
+
+
+**Forklaring av hovedfilene**  
+- `config.py`  
+  - Inneholder grunnkonfigurasjon: filbaner, sensorer, terskelverdier, variable-navn osv.
+
+- `data_processing.py`  
+  - Funksjoner for å lese inn CSV-filer, opprette datetime-indeks, resample-data til timeverdier og filtrere data etter ønsket tidsperiode.
+
+- `plotting.py`  
+  - Visualisering:  
+    - Temperatur- og luftfuktighetsplott (innendørs og utendørs).  
+    - Plotting av CO₂, formaldhyd, TVOC og partikler (PM 1, 2.5, 4 og 10).  
+    - Oversikt over datadekning per rom (Gantt-lignende visning).  
+    - Tabeller for dekningsgrad (prosentdel) per rom.
+
+- `building_analysis.py`  
+  - Menystyrt modul for å velge ett bygg, periode (år, vinter, sommer, måned, uke eller dag) og én variabel (f.eks. temperatur eller CO₂).  
+  - Kaller riktig plotting-funksjon basert på brukervalg.
+
+- `analysis.py`  
+  - Menystyrte funksjoner for global datautforskning (tidsserier og fordelingsplot) over alle bygg og rom.  
+  - Beregner spredningsmål, antall timer over terskel og prosent over terskel for alle bygg/variable.
+
+- `main.py`  
+  - Hovedprogram:  
+    - Viser hovedmeny.  
+    - Henter inn alle data (cache) ved oppstart.  
+    - Leder brukeren til utforskning (analysis), bygg-analyse (building_analysis) eller datadekning (plotting).
+
+---
+
+## Krav
+
+- Python 3.8 eller nyere  
+- Biblioteker:  
+  - `pandas`  
+  - `numpy`  
+  - `matplotlib`  
+
+---
+
+## Oppsett og installasjon
+
+1. **Last ned eller klon** dette repositoriet til lokal maskin.  
+2. Sørg for at du har Python 3.8 eller nyere installert.  
+3. Installer nødvendige Python-pakker. Eksempelvis:  
+   
+       pip install pandas numpy matplotlib  
+
+   (Ovenstående kan kopieres og limes direkte inn i terminal eller kommandoprompt, uten spesifikk språk-identifikator.)
+
+4. **Legg datafiler i riktig katalog**: Opprett en mappe som heter `CSV` i prosjektroten, og plasser følgende filer der:  
+   - Alle inneklima-CSV-filer for hvert bygg (filnavnene begynner med `data_RES{bygg}...csv`).  
+   - `Seklima.csv` (utendørstemperaturdata).  
+   - `Kunak.csv` (utendørluftfuktighetsdata).
+
+5. **Kjør programmet** fra prosjektroten med:  
+   
+       python main.py  
+
+---
+
+## Hvordan bruke programmet
+
+Når du kjører `python main.py`, vises en hovedmeny med tre valg:
+
+1. **Utforsk data (global analyse)**  
+   - Velg “1” for å gå til modul for global datautforskning.  
+   - Undermenyen lar deg velge:  
+     - Tidsserie for én variabel over alle bygg/rom.  
+     - Fordelingsplot (histogram og KDE) for én variabel.  
+     - Spredningsmål (standardavvik og kvartiler) for én variabel.  
+     - Tabell med antall timer over terskel og prosent over terskel for alle bygg/variable.  
+
+2. **Bygg-analyse**  
+   - Velg “2” for å gå til byggspesifikk analyse. Du blir bedt om å:  
+     1. Velge bygg fra en liste (f.eks. RES01012, RES01013 osv.).  
+     2. Velge tidsperiode:  
+        - År (f.eks. 2023)  
+        - Vinter (oktober–mars)  
+        - Sommer (april–september)  
+        - Måned (måned + år, f.eks. 04-2024)  
+        - Uke (uke + år, f.eks. uke 12 2025)  
+        - Dag (eksakt dato i format YYYY-MM-DD)  
+     3. Velge variabel:  
+        - **Temperatur (°C)**: Viser innendørs temperatur per rom, sammenligner med utendørstemperatur.  
+        - **Luftfuktighet (%)**: Viser innendørs luftfuktighet per rom, sammenligner med utendørsluftfuktighet.  
+        - **Luftkvalitetsvariabler (CO₂, formaldehyd, TVOC, PM1, PM2.5, PM4, PM10)**: Viser tidsserieøkter med varsel- og kritiske terskelnivåer.  
+
+3. **Datadekning (sensor-tilgjengelighet)**  
+   - Velg “3” for å vise hvor mye data som finnes per rom i alle bygg.  
+   - Programmet gir:  
+     - En Gantt-lignende visning (i matplotlib) som viser hvilke dager hvert rom har data.  
+     - Tabeller med prosentvis dekningsgrad per rom (hvor mange timer data finnes i forhold til total mulig).
+
+4. **Avslutte programmet**  
+   - Velg “0” i hovedmenyen for å lukke programmet.  
+
+Du kan når som helst taste “b” for å gå ett nivå tilbake i menyene.
+---
+
+## Eksempel
+
+Under er et enkelt eksempel på hvordan du kan kjøre en temperatur-plot for ett bygg og én måned:
+
+1. Åpne terminal (eller kommandoprompt) i prosjektroten.  
+2. Kjør:
+
+       python main.py
+
+3. Tast “2” for "Bygg-analyse".  
+4. Velg bygg, for eksempel “RES01012”.  
+5. Velg periode:  
+   - Tast “3” for “Måned”.  
+   - Tast “04” (april) når du blir bedt om måned.  
+   - Tast “2024” når du blir bedt om år.  
+6. Velg variabel:  
+   - Tast “1” for "Temperatur".  
+
+Programmet vil da hente alle temperaturdata for alle sensorer i **RES01012** i april 2024, plotte dem i én figur pr. rom, og vise utendørstemperatur over samme periode for sammenligning.
+
+---
+
+## Kontakt og videre hjelp
+
+Hvis du støter på problemer, kan du:
+
+- Sjekke at alle pakkene (`pandas`, `numpy`, `matplotlib`) er installert i riktig Python-miljø.  
+- Bekrefte at filnavn og kolonnenavn i CSV-filer stemmer overens med det koden forventer (Se `data_processing.py` for detaljer).  
+- Legge inn issues på GitHub (hvis prosjektet ligger der), eller ta kontakt med prosjektleder for Campus‐avdelingen som har ansvar for inneklimadata.
+
+## Tips og anbefalinger
+
+- **Oppdatere terskelverdier**  
+  - Dersom terskelverdiene for CO₂, temperatur eller andre variabler endres, kan du oppdatere dem i `config.py`.  
+  - 
+- **Laste nye CSV-filer**  
+  - Dersom du legger til flere inneklima-filer under `CSV/`, vil de automatisk bli plukket opp når du kjører `main.py` på nytt.  
+  - 
+- **Feilmeldinger**  
+  - Hvis et bygg eller en periode ikke har data, vil programmet skrive en melding i terminalen om at ingen data ble funnet. Sjekk at CSV-filenes tidsstempler er korrekte og at kolonnenavn stemmer overens med det som forventes i koden.  
+
+- **Dokumentasjon og videre utvikling**  
+  - Studer docstrings i hver fil for detaljer om funksjonsparametre.  
+  - Dersom du ønsker å legge til nye variabler eller nye analyser, kan du kopiere strukturen fra eksisterende funksjoner i `analysis.py` eller `building_analysis.py`.  
