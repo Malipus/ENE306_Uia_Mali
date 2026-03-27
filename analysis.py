@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from typing import List, Dict, Optional
+from datetime import datetime
+from building_analysis import TILGJENGELIGE_BYGG
 from data_processing import fetch_csv, set_datetime_index
 from plotting import plot_all_rooms_variable
 from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY,
@@ -29,9 +31,7 @@ def run_timer_over_terskel():
     Ber brukeren om et byggnummer, henter df_list og romnavn via fetch_csv(),
     kaller tabell_timer_over_terskel(...) og skriver ut tabellene per rom.
     """
-    from building_analysis import TILGJENGELIGE_BYGG
-    from data_processing import fetch_csv
-    from analysis import tabell_timer_over_terskel  # sikrer at tabell-funksjonen er synlig
+
 
     # 1) Velg bygg
     byggkoder = list(TILGJENGELIGE_BYGG.keys())
@@ -455,11 +455,6 @@ def vis_spredningsmål():
     Q3, maks, IQR, std dev) for én eller flere variabler på rad. Inkluderer valg av bygg (eller "a" = alle), valg
     om å splitte pr. rom, samt ny valgmulighet: periode fra måned–år til måned–år.
     """
-
-    import pandas as pd
-    from datetime import datetime
-    from data_processing import fetch_csv, set_datetime_index
-    from building_analysis import TILGJENGELIGE_BYGG
 
     # Hjelpefunksjon for å finne siste dag i en måned
     def siste_dagen_i_måned(år: int, måned: int) -> int:
@@ -1155,11 +1150,6 @@ def run_prosent_over_terskel_global():
     henter alle rom‐DataFrames for det/de valgte byggene, og kaller
     tabell_prosent_over_terskel_global(...) for å skrive ut de to tabellene.
     """
-
-    import building_analysis
-    from data_processing import fetch_csv
-    from analysis import tabell_prosent_over_terskel_global
-
     # 1) Velg bygg eller alle
     byggkoder = list(building_analysis.TILGJENGELIGE_BYGG.keys())
     while True:

@@ -3,9 +3,7 @@ import pandas as pd
 
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
-
-from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE,
-    INNEKLIMA_DIR)
+from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE, INNEKLIMA_DIR)
 
 # ─────────── Global cache ───────────
 # Cache lagrer for hver nøkkel "bygg-rom" en times-resamplet DataFrame
@@ -189,7 +187,6 @@ def filter_weather(df_weather: pd.DataFrame, mode: str = "year", year: Optional[
     Returnerer en ny DataFrame (eller tom DataFrame hvis ingen treff).
     """
     # Hent filter‐funksjonen fra oss selv (unngå sirkulær import til plot):
-    from data_processing import filter_data
     filtered_list = filter_data([df_weather], mode, year, month, week, day)
     if filtered_list:
         return filtered_list[0]

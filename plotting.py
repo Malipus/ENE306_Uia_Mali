@@ -11,55 +11,17 @@ from matplotlib.legend import Legend
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
 from matplotlib.ticker import FixedLocator, FixedFormatter
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from pathlib import Path
 
-from data_processing import (
-    INNEKLIMA_DIR,
-    fetch_csv,
-    fetch_weather,
-    set_datetime_index,
-    filter_data,
-    filter_weather,
-)
+from data_processing import (INNEKLIMA_DIR, fetch_csv, fetch_weather, set_datetime_index, filter_data, filter_weather)
 
-from config import (
-    THRESHOLDS_TEMPERATURE,
-    THRESHOLDS_OPTIMAL_HUMIDITY,
-    THRESHOLDS_WARN,
-    THRESHOLDS_CRITICAL,
-    LUFTKVALITETS_VARIABLER_I_REKKE,
-)
+from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY, THRESHOLDS_WARN, THRESHOLDS_CRITICAL,
+    LUFTKVALITETS_VARIABLER_I_REKKE)
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  1) plot_temperature
 # ──────────────────────────────────────────────────────────────────────────────
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-
-from matplotlib import cm
-from matplotlib.legend import Legend
-from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
-from matplotlib.ticker import FixedLocator, FixedFormatter
-
-from typing import List, Optional, Dict
-from pathlib import Path
-
-from data_processing import (
-    INNEKLIMA_DIR,
-    fetch_csv,
-    set_datetime_index,
-    filter_data,
-    fetch_weather  # <-- sørg for at dette er importert
-)
-from config import (
-    THRESHOLDS_TEMPERATURE,
-    THRESHOLDS_OPTIMAL_HUMIDITY,
-    THRESHOLDS_WARN,
-    THRESHOLDS_CRITICAL,
-    LUFTKVALITETS_VARIABLER_I_REKKE,
-)
 
 def plot_temperature(
     df_list: List[pd.DataFrame],
@@ -100,7 +62,7 @@ def plot_temperature(
         if not df_weather_filt.empty:
             show_weather = True
 
-    # 4) Lag figur/aks(er)
+    # 4) Lag figur/akser
     if show_weather:
         fig, (ax, ax_weather) = plt.subplots(
             nrows=2, ncols=1, sharex=True,
@@ -133,7 +95,7 @@ def plot_temperature(
         full_idx = pd.date_range(start=start, end=slutt, freq="1h")
         series = df_sort[temp_col].reindex(full_idx)
 
-        # c) Sett label til romnavn eller fallback “Rom {idx}”
+        # c) Sett label til romnavn eller “Rom {idx}”
         navn = romnavn[idx-1] if idx-1 < len(romnavn) else f"Rom {idx}"
         line, = ax.plot(
             series.index,
@@ -560,7 +522,7 @@ def plot_humidity(
     plt.show()
 
 def plot_air_quality_variable(
-    df_list: List[pd.DataFrame],
+df_list: List[pd.DataFrame],
     variable: str,
     mode: str = "year",
     year: Optional[int] = None,
@@ -1201,7 +1163,7 @@ def vis_dekningsgrad_alle_bygg() -> None:
     Loop gjennom alle tilgjengelige bygg, beregn dekningsgrad per rom, og skriv resultatet ut.
     """
 
-    # Hent TILGJENGELIGE_BYGG inn her (slik unngår vi top‐level sirkulær import)
+    # Hent TILGJENGELIGE_BYGG inn her (unngår top‐level sirkulær import)
     from building_analysis import TILGJENGELIGE_BYGG
 
     for byggkode in TILGJENGELIGE_BYGG:

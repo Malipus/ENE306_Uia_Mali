@@ -1,9 +1,9 @@
 import sys
-from data_processing import bygg_cache
-from plotting import vis_datadekning_per_rom, vis_dekningsgrad_alle_bygg
 import building_analysis
 import analysis
+import plotting
 
+from data_processing import bygg_cache
 
 def vis_hovedmeny():
     print("\n📋 HOVEDMENY")
@@ -20,7 +20,7 @@ def run_data_exploration():
     while True:
         print("\n🔎 UTFORSK DATA")
         print("1. Tidsserie over én variabel (alle bygg/rom)")
-        print("2. Fordeling (histogram + KDE) for én variabel (alle bygg/rom)")
+        print("2. Fordeling (histogram) for én variabel (alle bygg/rom)")
         print("b. Tilbake til hovedmeny")
 
         valg = input("Velg et alternativ: ").strip().lower()
@@ -49,10 +49,10 @@ def main():
             building_analysis.run_building_analysis()
 
         elif valg == "3":
-            vis_datadekning_per_rom()
+            plotting.vis_datadekning_per_rom()
 
         elif valg == "4":
-            vis_dekningsgrad_alle_bygg()
+            plotting.vis_dekningsgrad_alle_bygg()
 
         elif valg == "5":
             analysis.vis_spredningsmål()
