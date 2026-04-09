@@ -3,7 +3,6 @@ import building_analysis
 import analysis
 import plotting
 
-from data_processing import bygg_cache
 
 def vis_hovedmeny():
     print("\n📋 HOVEDMENY")
@@ -35,8 +34,6 @@ def run_data_exploration():
 
 
 def main():
-    # Cache bygg‐data (leser CSV/filer inn i minnet)
-    bygg_cache()
 
     while True:
         vis_hovedmeny()

@@ -1,4 +1,6 @@
 import pandas as pd
+from datetime import datetime
+
 from typing import List
 from data_processing import fetch_csv, set_datetime_index, filter_data, fetch_weather
 from plotting import plot_temperature, plot_humidity, plot_air_quality_variable
@@ -40,6 +42,17 @@ def be_om_uke(prompt="Skriv inn uke (1–53) eller 'b': "):
         print("❌ Ugyldig uke. Prøv igjen.")
         return be_om_uke(prompt)
     return int(inp)
+
+def be_om_dag(prompt="Skriv inn dato (ÅÅÅÅ-MM-DD) eller 'b': "):
+    inp = input(prompt).strip()
+    if inp.lower() == "b":
+        return None
+
+    try:
+        return datetime.strptime(inp, "%Y-%m-%d")
+    except ValueError:
+        print("❌ Ugyldig datoformat eller ugyldig dato. Prøv igjen.")
+        return be_om_dag(prompt)
 
 
 def run_building_analysis():
@@ -89,8 +102,8 @@ def velg_periode_og_variabel(
         # ── 1) Velg periode ──
         print("\n⏳ VELG TIDSPERIODE")
         print("1. År")
-        print("2. Vinter (Okt–Mars)")
-        print("3. Sommer (Apr–Sep)")
+        print("2. Høst (Aug-Des)")
+        print("3. Vår (Jan-Jun)")
         print("4. Måned")
         print("5. Uke")
         print("6. Dag")
@@ -110,14 +123,14 @@ def velg_periode_og_variabel(
             if year is None:
                 continue
 
-        elif periode_valg == '2':  # Vinter (okt–mar)
-            mode = 'winter'
+        elif periode_valg == '2':  # Høst (10. august til 10. desember)
+            mode = 'fall'
             year = be_om_år()
             if year is None:
                 continue
 
-        elif periode_valg == '3':  # Sommer (apr–sep)
-            mode = 'summer'
+        elif periode_valg == '3':  # Vår  (6. januar til 6. juni)
+            mode = 'spring'
             year = be_om_år()
             if year is None:
                 continue

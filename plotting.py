@@ -51,7 +51,7 @@ def plot_temperature(
     thresholds = [
         (THRESHOLDS_TEMPERATURE["day"]["min"],   "black",  "Dag/natt‐grense"),
         (THRESHOLDS_TEMPERATURE["day"]["max"],   "orange", "Maks dagtemperatur"),
-        (THRESHOLDS_TEMPERATURE["night"]["min"], "purple", "Min nattetemperatur")
+        (THRESHOLDS_TEMPERATURE["night"]["min"], "purple", "Min natt temperatur")
     ]
 
     # 3) Filtrer utendørsdata dersom tilgjengelig
@@ -180,12 +180,12 @@ def plot_temperature(
     elif mode == "year" and isinstance(year, int):
         start_vis = pd.to_datetime(f"{year}-01-01")
         slutt_vis = pd.to_datetime(f"{year}-12-31") + pd.Timedelta(days=1)
-    elif mode == "summer" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-04-01")
-        slutt_vis = pd.to_datetime(f"{year}-09-30") + pd.Timedelta(days=1)
-    elif mode == "winter" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-10-01")
-        slutt_vis = pd.to_datetime(f"{year+1}-03-31") + pd.Timedelta(days=1)
+    elif mode == "fall" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-08-10")
+        slutt_vis = pd.to_datetime(f"{year}-12-10") + pd.Timedelta(days=1)
+    elif mode == "spring" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-01-06")
+        slutt_vis = pd.to_datetime(f"{year}-06-06") + pd.Timedelta(days=1)
     else:
         alle_min = min(df.index.min() for df in df_filtered_list if not df.empty)
         alle_max = max(df.index.max() for df in df_filtered_list if not df.empty)
@@ -196,7 +196,7 @@ def plot_temperature(
         ax_weather.set_xlim(start_vis, slutt_vis)
 
     # 9) Formater x‐akse
-    if mode in ["year", "summer", "winter", "all"]:
+    if mode in ["year", "fall", "spring", "all"]:
         ax.xaxis.set_major_locator(YearLocator())
         ax.xaxis.set_major_formatter(DateFormatter("%Y"))
         ax.xaxis.set_minor_locator(MonthLocator())
@@ -234,10 +234,10 @@ def plot_temperature(
     elif mode == "day" and isinstance(day, pd.Timestamp):
         dato_str = day.strftime("%-d. %b %Y") if os.name != "nt" else day.strftime("%#d. %b %Y")
         periode_str = f"{dato_str}"
-    elif mode == "summer" and isinstance(year, int):
-        periode_str = f"Sommer {year}"
-    elif mode == "winter" and isinstance(year, int):
-        periode_str = f"Vinter {year}-{year+1}"
+    elif mode == "spring" and isinstance(year, int):
+        periode_str = f"Våren {year}"
+    elif mode == "fall" and isinstance(year, int):
+        periode_str = f"Høsten {year}"
 
     ax.set_title(f"Bygg {byggkode} – Temperatur for {periode_str}")
 
@@ -429,12 +429,12 @@ def plot_humidity(
     elif mode == "year" and isinstance(year, int):
         start_vis = pd.to_datetime(f"{year}-01-01")
         slutt_vis = pd.to_datetime(f"{year}-12-31") + pd.Timedelta(days=1)
-    elif mode == "summer" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-04-01")
-        slutt_vis = pd.to_datetime(f"{year}-09-30") + pd.Timedelta(days=1)
-    elif mode == "winter" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-10-01")
-        slutt_vis = pd.to_datetime(f"{year+1}-03-31") + pd.Timedelta(days=1)
+    elif mode == "fall" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-08-10")
+        slutt_vis = pd.to_datetime(f"{year}-12-10") + pd.Timedelta(days=1)
+    elif mode == "spring" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-01-06")
+        slutt_vis = pd.to_datetime(f"{year}-06-06") + pd.Timedelta(days=1)
     else:
         alle_min = min(df.index.min() for df in df_filtered_list if not df.empty)
         alle_max = max(df.index.max() for df in df_filtered_list if not df.empty)
@@ -445,7 +445,7 @@ def plot_humidity(
         ax_weather.set_xlim(start_vis, slutt_vis)
 
     # 9) Formater x‐akse
-    if mode in ["year", "summer", "winter", "all"]:
+    if mode in ["year", "fall", "spring", "all"]:
         ax.xaxis.set_major_locator(YearLocator())
         ax.xaxis.set_major_formatter(DateFormatter("%Y"))
         ax.xaxis.set_minor_locator(MonthLocator())
@@ -483,10 +483,10 @@ def plot_humidity(
     elif mode == "day" and isinstance(day, pd.Timestamp):
         dato_str = day.strftime("%-d. %b %Y") if os.name != "nt" else day.strftime("%#d. %b %Y")
         periode_str = f"{dato_str}"
-    elif mode == "summer" and isinstance(year, int):
-        periode_str = f"Sommer {year}"
-    elif mode == "winter" and isinstance(year, int):
-        periode_str = f"Vinter {year}-{year+1}"
+    elif mode == "spring" and isinstance(year, int):
+        periode_str = f"Vårsemester {year}"
+    elif mode == "fall" and isinstance(year, int):
+        periode_str = f"Høstsemester {year}-{year+1}"
 
     ax.set_title(f"Bygg {byggkode} – Luftfuktighet for {periode_str}")
 
@@ -648,12 +648,12 @@ df_list: List[pd.DataFrame],
     elif mode == "year" and isinstance(year, int):
         start_vis = pd.to_datetime(f"{year}-01-01")
         slutt_vis = pd.to_datetime(f"{year}-12-31") + pd.Timedelta(days=1)
-    elif mode == "summer" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-04-01")
-        slutt_vis = pd.to_datetime(f"{year}-09-30") + pd.Timedelta(days=1)
-    elif mode == "winter" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-10-01")
-        slutt_vis = pd.to_datetime(f"{year+1}-03-31") + pd.Timedelta(days=1)
+    elif mode == "fall" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-08-10")
+        slutt_vis = pd.to_datetime(f"{year}-12-10") + pd.Timedelta(days=1)
+    elif mode == "spring" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-01-06")
+        slutt_vis = pd.to_datetime(f"{year}-06-06") + pd.Timedelta(days=1)
     else:
         alle_min = min(df.index.min() for df in df_filtered_list if not df.empty)
         alle_max = max(df.index.max() for df in df_filtered_list if not df.empty)
@@ -662,7 +662,7 @@ df_list: List[pd.DataFrame],
     ax.set_xlim(start_vis, slutt_vis)
 
     # 8) Formater x‐akse etter periode
-    if mode in ["year", "summer", "winter", "all"]:
+    if mode in ["year", "fall", "spring", "all"]:
         ax.xaxis.set_major_locator(YearLocator())
         ax.xaxis.set_major_formatter(DateFormatter("%Y"))
         ax.xaxis.set_minor_locator(MonthLocator())
@@ -700,10 +700,10 @@ df_list: List[pd.DataFrame],
 
     if mode == "year" and isinstance(year, int):
         ax.set_title(f"Bygg {bygge_nummer} – {variable} for {year}")
-    elif mode == "winter" and isinstance(year, int):
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for Vinter {year}-{year+1}")
-    elif mode == "summer" and isinstance(year, int):
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for Sommer {year}")
+    elif mode == "spring" and isinstance(year, int):
+        ax.set_title(f"Bygg {bygge_nummer} – {variable} for høsten {year}")
+    elif mode == "fall" and isinstance(year, int):
+        ax.set_title(f"Bygg {bygge_nummer} – {variable} for våren {year}")
     elif mode == "month" and isinstance(year, int) and isinstance(month, int):
         måned_navn = pd.to_datetime(f"{month}", format="%m").strftime("%B")
         ax.set_title(f"Bygg {bygge_nummer} – {variable} for {måned_navn} {year}")

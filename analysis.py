@@ -5,13 +5,10 @@ import numpy as np
 from typing import List, Dict, Optional
 from datetime import datetime
 from building_analysis import TILGJENGELIGE_BYGG
-from data_processing import fetch_csv, set_datetime_index
+from data_processing import fetch_csv, set_datetime_index, filter_data
 from plotting import plot_all_rooms_variable
 from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY,
                     THRESHOLDS_WARN, THRESHOLDS_CRITICAL, LUFTKVALITETS_VARIABLER_I_REKKE)
-
-# Hvilke bygg skal brukes her
-TILGJENGELIGE_BYGG = ["01", "02", "04", "05", "07", "08"]
 
 VARIABLE_CHOICES = {
     "1": "Temperatur (°C)",
@@ -25,16 +22,114 @@ VARIABLE_CHOICES = {
     "9": "PM 10 (µg/m³)"
 }
 
-# ─── START AV run_timer_over_terskel ─────────────────────────────────────────
+def _collect_all_room_data(variable: str):
+    """
+    Henter hver rom‐DataFrame for alle bygg i TILGJENGELIGE_BYGG, setter datetime‐index,
+    filtrerer bort rom som ikke har kolonnen, og returnerer liste av DataFrames.
+    """
+    all_dfs = []
+    all_labels = []
+
+    for bygg in TILGJENGELIGE_BYGG:
+        try:
+            dfs_bygg, romnavn, _ = fetch_csv(building_number=bygg)
+        except Exception as e:
+            print(f"⚠️ Klarte ikke hente data for bygg {bygg}: {e}")
+            continue
+
+        for df, rom in zip(dfs_bygg, romnavn):
+            df2 = set_datetime_index(df)
+            if variable not in df2.columns:
+                continue
+
+            # Lag ny kolonne “Value” med bare én variabel
+            df3 = df2[[variable]].copy()
+            df3.rename(columns={variable: "Value"}, inplace=True)
+
+            all_dfs.append(df3)
+            all_labels.append(f"B{bygg}-R{rom}")
+
+    return all_dfs, all_labels
+
+def run_time_series():
+    """
+    Hovedmeny for å plotte tidsserie for én valgt variabel på tvers av alle bygg/rom.
+    Etter ett plott kan brukeren taste ny variabelkode for nytt plott,
+    eller 'b' for å gå tilbake til forrige meny.
+    """
+    while True:
+        # 1) Velg variabel
+        print("\n📊 VELG VARIABEL FOR TIDSSERIEPLOTT")
+        for key, var in VARIABLE_CHOICES.items():
+            print(f"{key}. {var}")
+        print("b. Tilbake til forrige meny")
+
+        valg = input("Valg: ").strip().lower()
+        if valg == 'b':
+            return  # Gå tilbake til hovedmeny
+        if valg not in VARIABLE_CHOICES:
+            print("❌ Ugyldig valg. Prøv igjen.")
+            continue
+
+        variable = VARIABLE_CHOICES[valg]
+        print(f"👉 Du har valgt: {variable}")
+
+        # 2) Hent alle rom‐data for den valgte variabelen:
+        dfs, rom_labels = _collect_all_room_data(variable)
+        if not dfs:
+            print(f"❌ Ingen data funnet for variabelen '{variable}'.")
+            # Returner til toppen av loop slik at brukeren kan taste ny kode
+            continue
+
+        # 3) Plot tidsserien over hele perioden
+        plot_all_rooms_variable(dfs, variable)
+
+        continue
+
+
+def run_distribution():
+    """
+    Hovedmeny for å plotte fordeling (histogram) for én variabel på tvers av alle rom/bygg.
+    Løkker slik at brukeren kan taste nytt valg umiddelbart etter plottet lukkes.
+    """
+    while True:
+        # 1) Velg variabel
+        print("\n📊 VELG VARIABEL FOR FORDELINGSPLOTT")
+        for key, var in VARIABLE_CHOICES.items():
+            print(f"{key}. {var}")
+        print("b. Tilbake til forrige meny")
+
+        valg = input("Valg: ").strip().lower()
+        if valg == 'b':
+            return  # Ut av run_distribution tilbake til forrige meny
+        if valg not in VARIABLE_CHOICES:
+            print("❌ Ugyldig valg. Prøv igjen.")
+            continue
+
+        variable = VARIABLE_CHOICES[valg]
+        print(f"\n👉 Du har valgt: {variable}")
+
+        # 2) Hent alle rom‐data og samle alle verdier i én Series
+        serie = _collect_all_values_for_variable(variable)
+        if serie is None or serie.empty:
+            print(f"❌ Ingen data funnet for variabelen '{variable}'.")
+            # Fortsett for å spørre om ny variabel
+            continue
+
+        # 3) Plot histogram for valgte variabel (interaktivt)
+        _plot_distribution(serie, variable)
+        # Når brukeren lukker plottvinduet, kommer vi hit og går tilbake til starten av løkka
+
+
 def run_timer_over_terskel():
     """
-    Ber brukeren om et byggnummer, henter df_list og romnavn via fetch_csv(),
+.keys()    Ber brukeren om et byggnummer, henter df_list og romnavn via fetch_csv(),
     kaller tabell_timer_over_terskel(...) og skriver ut tabellene per rom.
     """
 
 
     # 1) Velg bygg
-    byggkoder = list(TILGJENGELIGE_BYGG.keys())
+    byggkoder = list(TILGJENGELIGE_BYGG)
     while True:
         print("\n🏢 VELG BYGG FOR 'TIMER OVER TERSKEL'")
         for kode in byggkoder:
@@ -73,109 +168,10 @@ def run_timer_over_terskel():
     for rom, df_tab in resultater.items():
         print(f"\n── {rom} ──")
         print(df_tab.to_string(index=False))
-# ─── SLUTT AV run_timer_over_terskel ──────────────────────────────────────────
-
-def run_time_series():
-    """
-    Hovedmeny for å plotte tidsserie for én valgt variabel på tvers av alle bygg/rom.
-    Etter ett plott kan brukeren taste ny variabelkode for nytt plott,
-    eller 'b' for å gå tilbake til forrige meny.
-    """
-    while True:
-        # 1) Velg variabel
-        print("\n📊 VELG VARIABEL FOR TIDSSERIEPLOTT")
-        for key, var in VARIABLE_CHOICES.items():
-            print(f"{key}. {var}")
-        print("b. Tilbake til forrige meny")
-
-        valg = input("Valg: ").strip().lower()
-        if valg == 'b':
-            return  # Gå tilbake til hovedmeny
-        if valg not in VARIABLE_CHOICES:
-            print("❌ Ugyldig valg. Prøv igjen.")
-            continue
-
-        variable = VARIABLE_CHOICES[valg]
-        print(f"👉 Du har valgt: {variable}")
-
-        # 2) Hent alle rom‐data for den valgte variabelen:
-        dfs, rom_labels = _collect_all_room_data(variable)
-        if not dfs:
-            print(f"❌ Ingen data funnet for variabelen '{variable}'.")
-            # Returner til toppen av loop slik at brukeren kan taste ny kode
-            continue
-
-        # 3) Plot tidsserien over hele perioden
-        plot_all_rooms_variable(dfs, variable)
-
-        # Når plottet er lukket, havner vi her – brukeren kan taste
-        # ny variabelkode eller 'b' for å forlate loop.
-        # (Ingen ny meny-print‐sekvens før input‐prompten dukker opp.)
-        # Derfor gjør vi en enkel “fortsett” tilbake til starten av while‐loopen:
-        continue
-
-def _collect_all_room_data(variable: str):
-    """
-    Henter hver rom‐DataFrame for alle bygg i TILGJENGELIGE_BYGG, setter datetime‐index,
-    filtrerer bort rom som ikke har kolonnen, og returnerer liste av DataFrames.
-    """
-    all_dfs = []
-    all_labels = []
-
-    for bygg in TILGJENGELIGE_BYGG:
-        try:
-            dfs_bygg, romnavn, _ = fetch_csv(building_number=bygg)
-        except Exception as e:
-            print(f"⚠️ Klarte ikke hente data for bygg {bygg}: {e}")
-            continue
-
-        for df, rom in zip(dfs_bygg, romnavn):
-            df2 = set_datetime_index(df)
-            if variable not in df2.columns:
-                continue
-
-            # Lag ny kolonne “Value” med bare én variabel
-            df3 = df2[[variable]].copy()
-            df3.rename(columns={variable: "Value"}, inplace=True)
-
-            all_dfs.append(df3)
-            all_labels.append(f"B{bygg}-R{rom}")
-
-    return all_dfs, all_labels
 
 
-def run_distribution():
-    """
-    Hovedmeny for å plotte fordeling (histogram) for én variabel på tvers av alle rom/bygg.
-    Løkker slik at brukeren kan taste nytt valg umiddelbart etter plottet lukkes.
-    """
-    while True:
-        # 1) Velg variabel
-        print("\n📊 VELG VARIABEL FOR FORDELINGSPLOTT")
-        for key, var in VARIABLE_CHOICES.items():
-            print(f"{key}. {var}")
-        print("b. Tilbake til forrige meny")
 
-        valg = input("Valg: ").strip().lower()
-        if valg == 'b':
-            return  # Ut av run_distribution tilbake til forrige meny
-        if valg not in VARIABLE_CHOICES:
-            print("❌ Ugyldig valg. Prøv igjen.")
-            continue
 
-        variable = VARIABLE_CHOICES[valg]
-        print(f"\n👉 Du har valgt: {variable}")
-
-        # 2) Hent alle rom‐data og samle alle verdier i én Series
-        serie = _collect_all_values_for_variable(variable)
-        if serie is None or serie.empty:
-            print(f"❌ Ingen data funnet for variabelen '{variable}'.")
-            # Fortsett for å spørre om ny variabel
-            continue
-
-        # 3) Plot histogram for valgte variabel (interaktivt)
-        _plot_distribution(serie, variable)
-        # Når brukeren lukker plottvinduet, kommer vi hit og går tilbake til starten av løkka
 
 def _collect_all_values_for_variable(variable: str) -> pd.Series:
     """
@@ -217,7 +213,6 @@ def _plot_time_series_all_rooms(dfs: list, labels: list, variable: str):
     y_label = variable
     title_prefix = f"{variable}"
 
-    # Eksempel: temperatur‐terskler:
     if variable == "Temperatur (°C)":
         # Dag/natt, maks dag, min natt
         day_min = THRESHOLDS_TEMPERATURE["day"]["min"]
@@ -263,7 +258,7 @@ def _plot_time_series_all_rooms(dfs: list, labels: list, variable: str):
     for nivå, farge, etikett in thresholds:
         ax.axhline(y=nivå, color=farge, linestyle='--', linewidth=1.5, label=etikett)
 
-    # 5) Legg på tittel‐eksempel (du kan tilpasse ytterligere om ønskelig)
+    # 5) Legg på tittel
     ax.set_title(f"{title_prefix} – Tidsserie for alle rom")
     ax.set_ylabel(y_label)
     ax.set_xlabel("Dato/tid")
@@ -495,15 +490,15 @@ def vis_spredningsmål():
             year = int(inp)
 
         elif ans == '2':
-            mode = 'winter'
-            inp = input("Skriv inn årstall for vinterstart (ÅÅÅÅ): ").strip()
+            mode = 'fall'
+            inp = input("Skriv inn årstall (ÅÅÅÅ): ").strip()
             if not (inp.isdigit() and len(inp) == 4):
                 print("❌ Ugyldig årstall.")
                 continue
             year = int(inp)
 
         elif ans == '3':
-            mode = 'summer'
+            mode = 'spring'
             inp = input("Skriv inn årstall (ÅÅÅÅ): ").strip()
             if not (inp.isdigit() and len(inp) == 4):
                 print("❌ Ugyldig årstall.")
@@ -627,9 +622,9 @@ def vis_spredningsmål():
         periode_str = ""
         if mode == "year":
             periode_str = f"{year}"
-        elif mode == "winter":
+        elif mode == "fall":
             periode_str = f"Vinter {year}-{year+1}"
-        elif mode == "summer":
+        elif mode == "spring":
             periode_str = f"Sommer {year}"
         elif mode == "month":
             måned_navn = pd.to_datetime(f"{year}-{month:02d}-01").strftime("%B")
@@ -1151,7 +1146,7 @@ def run_prosent_over_terskel_global():
     tabell_prosent_over_terskel_global(...) for å skrive ut de to tabellene.
     """
     # 1) Velg bygg eller alle
-    byggkoder = list(building_analysis.TILGJENGELIGE_BYGG.keys())
+    byggkoder = list(TILGJENGELIGE_BYGG.keys())
     while True:
         print("\n🏢 VELG BYGG FOR 'PROSENT OVER TERSKEL GLOBAL'")
         for kode in byggkoder:

@@ -5,54 +5,6 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE, INNEKLIMA_DIR)
 
-# ─────────── Global cache ───────────
-# Cache lagrer for hver nøkkel "bygg-rom" en times-resamplet DataFrame
-_ALLE_ROM_CACHE: Dict[str, pd.DataFrame] = {}
-_HAS_CACHED = False
-
-def bygg_cache(tilgjengelige_bygg=None) -> None:
-    """
-    Leser alle CSV-filer for hvert bygg og hvert rom én gang,
-    kjører set_datetime_index(df) for hver, og lagrer resultatet
-    i _ALLE_ROM_CACHE med nøkkel "bygg-rom".
-    Dette kalles internt av get_all_rooms_data().
-    """
-    global _HAS_CACHED, _ALLE_ROM_CACHE
-
-    if _HAS_CACHED:
-        return
-
-    if tilgjengelige_bygg is None:
-        # Standardliste (kan overrides av kallende kode)
-        tilgjengelige_bygg = ["01", "02", "04", "05", "07", "08"]
-
-    for bygg in tilgjengelige_bygg:
-        try:
-            dfs_bygg, romnavn, _ = fetch_csv(building_number=bygg)
-        except Exception:
-            # Hvis ett bygg feiler, hopper vi over det
-            continue
-
-        for df, rom in zip(dfs_bygg, romnavn):
-            df2 = set_datetime_index(df)
-            if df2 is None or df2.empty:
-                continue
-            nøkkel = f"{bygg}-{rom}"
-            _ALLE_ROM_CACHE[nøkkel] = df2
-
-    _HAS_CACHED = True
-
-def get_all_rooms_data(byggliste=None) -> Dict[str, pd.DataFrame]:
-    """
-    Returnerer en dict der hver nøkkel er "bygg-rom" og hver verdi er
-    en times-resamplet DataFrame med alle kolonner (temperatur, CO₂, osv.).
-    Hvis cachen ikke er fylt, kaller vi _bygg_cache() først.
-
-    byggliste: liste av bygg-koder (f.eks. ["01","02",…]) – default = None.
-    """
-    _bygg_cache(tilgjengelige_bygg=byggliste)
-    return _ALLE_ROM_CACHE.copy()
-
 def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "07", filenames: Optional[List[str]] = None) -> Tuple[List[pd.DataFrame], List[str], int]:
     """
     Leser alle inneklima‐CSV‐filer for ett bygg, og returnerer:
@@ -253,8 +205,8 @@ def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[
       - 'month'  → beholder (år == year) & (måned == month)
       - 'week'   → beholder isocalendar.week == week  (årskryssende uke håndtert av pandas)
       - 'day'    → beholder eksakt dato (Year-Month-Day)
-      - 'winter' → okt–des i year OR jan–mars i year+1
-      - 'summer' → april–september i year
+      - "' → okt–des i year OR jan–mars i year+1
+      - 'spring' → april–september i year
     Hver filtrert DataFrame blir lagt i resultatlista, men tomme DataFrames kastes.
 
     Returnerer:
@@ -266,7 +218,7 @@ def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[
     if mode == "all":
         return df_list
 
-    if mode in ["year", "winter", "summer"] and year is None:
+    if mode in ["year", "fall", "spring"] and year is None:
         raise ValueError(f"Må oppgi år for modus '{mode}'")
 
     filtered_list: List[pd.DataFrame] = []
@@ -287,14 +239,18 @@ def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[
                 (df_copy.index.month == day.month) &
                 (df_copy.index.day == day.day)
             ]
-        elif mode == "winter":
+        elif mode == "fall": # 10. August til 10. desember
             mask = (
-                ((df_copy.index.year == year) & (df_copy.index.month >= 10)) |
-                ((df_copy.index.year == year + 1) & (df_copy.index.month <= 3))
+                ((df_copy.index.year == year) & (df_copy.index.month >= 8)) |
+                ((df_copy.index.year == year) & (df_copy.index.month <= 12))
             )
             df_copy = df_copy[mask]
-        elif mode == "summer":
-            mask = (df_copy.index.year == year) & (df_copy.index.month.between(4, 9))
+
+        elif mode == "spring": # Januar til Juni
+            mask = (
+                ((df_copy.index.year == year) & (df_copy.index.month >= 1)) |
+                ((df_copy.index.year == year) & (df_copy.index.month <= 6))
+            )
             df_copy = df_copy[mask]
         else:
             raise ValueError(f"Ukjent mode: '{mode}'")
