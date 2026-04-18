@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+
 from matplotlib import cm
 from matplotlib.legend import Legend
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
@@ -15,7 +16,8 @@ from pathlib import Path
 
 from data_processing import (INNEKLIMA_DIR, fetch_csv, set_datetime_index, filter_data, filter_weather)
 
-from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY, THRESHOLDS_WARN, THRESHOLDS_CRITICAL)
+from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY, THRESHOLDS_WARN, THRESHOLDS_CRITICAL,
+                    TILGJENGELIGE_BYGG)
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  1) plot_temperature
@@ -875,7 +877,7 @@ def plot_all_rooms_variable(df_list: List[pd.DataFrame], variable: str) -> None:
 
     for child in ax.get_children():
         if isinstance(child, Legend):
-            labels = [h.get_label() for h in child.legendHandles]
+            labels = [text.get_text() for text in child.get_texts()]
             if any("Rom" in lbl for lbl in labels):
                 child.remove()
 
@@ -984,7 +986,7 @@ def plot_all_pm_subplots(pm_data: Dict[str, List[pd.DataFrame]]) -> None:
 
         for child in ax.get_children():
             if isinstance(child, Legend):
-                labels = [h.get_label() for h in child.legendHandles]
+                labels = [text.get_text() for text in child.get_texts()]
                 if any("Rom" in lbl for lbl in labels):
                     child.remove()
 
@@ -1051,9 +1053,12 @@ def dekningsgrad_per_rom(df_list: List[pd.DataFrame], romnavn_list: List[str]) -
 
 # ────────────── Datadeknings for alle rom ──────────────
 def vis_datadekning_per_rom(
-    byggliste: List[str] = ["01", "02", "04", "05", "07", "08"],
+    byggliste: Optional[list[str]] = None,
     mappe: Path = INNEKLIMA_DIR
-) -> None:
+):
+    if byggliste is None:
+        byggliste = list(TILGJENGELIGE_BYGG.keys())
+
     """
     Tegner en oversikt over hvilke dager hvert rom har data paa tvers av bygg.
     Henter CSV for hvert bygg/rom via fetch_csv og set_datetime_index.
@@ -1089,11 +1094,11 @@ def vis_datadekning_per_rom(
     df.sort_values(by=["Etikett", "Start"], inplace=True)
     df.reset_index(drop=True, inplace=True)
 
+    cmap = cm.get_cmap("tab10", len(sorted(df["Bygg"].unique())))
+
     bygg_farger = {
-        bygg: farge for bygg, farge in zip(
-            sorted(df["Bygg"].unique()),
-            cm.get_cmap("tab10").colors
-        )
+        bygg: cmap(i)
+        for i, bygg in enumerate(sorted(df["Bygg"].unique()))
     }
 
     fig, ax = plt.subplots(

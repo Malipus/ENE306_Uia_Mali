@@ -1,32 +1,14 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-
 from datetime import datetime
 from typing import List
 
 from data_processing import fetch_csv, set_datetime_index, filter_data, fetch_weather
 from plotting import plot_temperature, plot_humidity, plot_air_quality_variable
 from config import (LUFTKVALITETS_VARIABLER_I_REKKE, INNEKLIMA_DIR, THRESHOLDS_TEMPERATURE, THRESHOLDS_CRITICAL,
-                    THRESHOLDS_OPTIMAL_HUMIDITY)
+                    THRESHOLDS_OPTIMAL_HUMIDITY, TILGJENGELIGE_BYGG, PM_VARIABLER)
 
-
-
-TILGJENGELIGE_BYGG = {
-    '01': 'Tønnevoldsgate 26, Sentrum',
-    '02': 'Jon Lilletuns Vei 2A, Campus',
-    '04': 'Jon Lilletuns Vei 15, Campus',
-    '05': 'Jon Lilletuns Vei 17, Campus',
-    '07': 'Jon Lilletuns Vei 21, Campus',
-    '08': 'Jon Lilletuns Vei 23, Campus'
-}
-
-PM_VARIABLER = [
-    "PM 1.0 (µg/m³)",
-    "PM 2.5 (µg/m³)",
-    "PM 4.0 (µg/m³)",
-    "PM 10 (µg/m³)"
-]
 
 
 def be_om_år(prompt="Skriv inn år (ÅÅÅÅ) eller 'b': "):
@@ -235,14 +217,6 @@ def velg_periode_og_variabel(
             # Når bruker lukker graf‐vinduet, returnerer vi hit og kan velge ny variabel
             continue
 
-def gyldig_år(inp: str) -> bool:
-    return len(inp) == 4 and inp.isdigit()
-
-def gyldig_måned(inp: str) -> bool:
-    return inp.isdigit() and 1 <= int(inp) <= 12
-
-def gyldig_uke(inp: str) -> bool:
-    return inp.isdigit() and 1 <= int(inp) <= 53
 
 def filtrer_datointervall(df: pd.DataFrame, start_dato: str, slutt_dato: str) -> pd.DataFrame:
     start = pd.to_datetime(start_dato)
@@ -255,6 +229,7 @@ def samle_data_per_bygg(variabel: str, start_dato: str, slutt_dato: str):
     bygg_labels = []
 
     for byggkode, byggnavn in TILGJENGELIGE_BYGG.items():
+        dfs: list[pd.DataFrame]
         dfs, romnavn, _ = fetch_csv(building_number=byggkode)
 
         alle_verdier = []
@@ -264,7 +239,9 @@ def samle_data_per_bygg(variabel: str, start_dato: str, slutt_dato: str):
             df = filtrer_datointervall(df, start_dato, slutt_dato)
 
             if variabel in df.columns:
-                verdier = pd.to_numeric(df[variabel], errors="coerce").dropna()
+                serie: pd.Series = pd.to_numeric(df[variabel], errors="coerce")
+                verdier = serie.dropna()
+
                 if not verdier.empty:
                     alle_verdier.extend(verdier.tolist())
 
@@ -273,7 +250,6 @@ def samle_data_per_bygg(variabel: str, start_dato: str, slutt_dato: str):
             bygg_labels.append(f"{byggkode} - {byggnavn}")
 
     return bygg_data, bygg_labels
-
 
 def plot_boksplott_per_bygg(variabel: str, start_dato: str, slutt_dato: str):
     bygg_data, bygg_labels = samle_data_per_bygg(variabel, start_dato, slutt_dato)

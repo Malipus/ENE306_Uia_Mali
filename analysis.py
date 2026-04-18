@@ -2,23 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-from building_analysis import TILGJENGELIGE_BYGG
 from data_processing import fetch_csv, set_datetime_index
 from plotting import plot_all_rooms_variable
 from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY,
-                    THRESHOLDS_WARN, THRESHOLDS_CRITICAL)
+                    THRESHOLDS_WARN, THRESHOLDS_CRITICAL, TILGJENGELIGE_BYGG, VARIABLE_CHOICES)
 
-VARIABLE_CHOICES = {
-    "1": "Temperatur (°C)",
-    "2": "Luftfuktighet (%)",
-    "3": "CO2 (ppm)",
-    "4": "Formaldehyd (µg/m³)",
-    "5": "TVOC (ppb)",
-    "6": "PM 1.0 (µg/m³)",
-    "7": "PM 2.5 (µg/m³)",
-    "8": "PM 4.0 (µg/m³)",
-    "9": "PM 10 (µg/m³)"
-}
+
 
 def _collect_all_room_data(variable: str):
     """
@@ -128,7 +117,8 @@ def _collect_all_values_for_variable(variable: str) -> pd.Series:
     for bygg in TILGJENGELIGE_BYGG:
         try:
             dfs_bygg, romnavn, _ = fetch_csv(building_number=bygg)
-        except Exception:
+        except Exception as e:
+            print(f"Kunne ikke hente data for bygg {bygg}: {e}")
             continue
 
         for df, rom in zip(dfs_bygg, romnavn):

@@ -21,6 +21,18 @@ INNEKLIMA_PREFIX_TEMPLATE = "data_RES{bygg}01"
 # Terskler og variabelnavn
 # ------------------------------------------------------------------
 
+VARIABLE_CHOICES = {
+    "1": "Temperatur (°C)",
+    "2": "Luftfuktighet (%)",
+    "3": "CO2 (ppm)",
+    "4": "Formaldehyd (µg/m³)",
+    "5": "TVOC (ppb)",
+    "6": "PM 1.0 (µg/m³)",
+    "7": "PM 2.5 (µg/m³)",
+    "8": "PM 4.0 (µg/m³)",
+    "9": "PM 10 (µg/m³)"
+}
+
 # Oversettelser mellom KPI‐koder og fulle kolonnenavn (hvis ønskelig):
 VARIABLES = {
     "vi":   "Ventilation Indicator",
@@ -80,6 +92,22 @@ LUFTKVALITETS_VARIABLER_I_REKKE = [
     "CO2 (ppm)",
     "Formaldehyd (µg/m³)",
     "TVOC (ppb)",
+    "PM 1.0 (µg/m³)",
+    "PM 2.5 (µg/m³)",
+    "PM 4.0 (µg/m³)",
+    "PM 10 (µg/m³)"
+]
+
+TILGJENGELIGE_BYGG = {
+    '01': 'Tønnevoldsgate 26, Sentrum',
+    '02': 'Jon Lilletuns Vei 2A, Campus',
+    '04': 'Jon Lilletuns Vei 15, Campus',
+    '05': 'Jon Lilletuns Vei 17, Campus',
+    '07': 'Jon Lilletuns Vei 21, Campus',
+    '08': 'Jon Lilletuns Vei 23, Campus'
+}
+
+PM_VARIABLER = [
     "PM 1.0 (µg/m³)",
     "PM 2.5 (µg/m³)",
     "PM 4.0 (µg/m³)",
