@@ -116,14 +116,14 @@ def run_distribution():
             # Fortsett for å spørre om ny variabel
             continue
 
-        # 3) Plot histogram for valgte variabel (interaktivt)
+        # 3) Plot histogram for valgte variabel
         _plot_distribution(serie, variable)
         # Når brukeren lukker plottvinduet, kommer vi hit og går tilbake til starten av løkka
 
 
 def run_timer_over_terskel():
     """
-.keys()    Ber brukeren om et byggnummer, henter df_list og romnavn via fetch_csv(),
+    Ber brukeren om et byggnummer, henter df_list og romnavn via fetch_csv(),
     kaller tabell_timer_over_terskel(...) og skriver ut tabellene per rom.
     """
 

@@ -13,6 +13,7 @@ def vis_hovedmeny():
     print("5. Spredningsmål")
     print("6. Timer over terskel")
     print("7. Prosent over terskel global")
+    print("8. Boxplot")
     print("b. Avslutt")
 
 def run_data_exploration():
@@ -59,6 +60,9 @@ def main():
 
         elif valg == "7":
             analysis.run_prosent_over_terskel_global()
+
+        elif valg == "8":
+            building_analysis.run_boxplot_alle_bygg()
 
         elif valg == "b":
             print("Avslutter...")

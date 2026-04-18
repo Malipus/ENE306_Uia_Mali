@@ -23,21 +23,12 @@ from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY, THRESHO
 #  1) plot_temperature
 # ──────────────────────────────────────────────────────────────────────────────
 
-def plot_temperature(
-    df_list: List[pd.DataFrame],
-    mode: str = "year",
-    year: Optional[int] = None,
-    month: Optional[int] = None,
-    week: Optional[int] = None,
-    day: Optional[pd.Timestamp] = None,
-    df_weather: Optional[pd.DataFrame] = None,
-    byggkode: str = "",
-    romnavn: List[str] = []
-) -> None:
+def plot_temperature(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[int] = None,
+    month: Optional[int] = None, week: Optional[int] = None, day: Optional[pd.Timestamp] = None,
+    df_weather: Optional[pd.DataFrame] = None, byggkode: str = "", romnavn: List[str] = []) -> None:
+
     """
-    Plotter temperatur for én eller flere rom i df_list, inkludert utendørsdata
-    (hvis df_weather er gitt). Rom‐legend bygges ved å samle linjeobjekter
-    for hvert rom direkte i room_lines. Tittel inkluderer kun byggkode.
+    Plotter temperatur for én eller flere rom i df_list, inkludert utendørsdata.
     """
 
     # 1) Filtrer innendørsdata
@@ -1058,13 +1049,13 @@ def dekningsgrad_per_rom(df_list: List[pd.DataFrame], romnavn_list: List[str]) -
     )
 
 
-# ────────────── Datadeknings‐Gantt for alle rom ──────────────
+# ────────────── Datadeknings for alle rom ──────────────
 def vis_datadekning_per_rom(
     byggliste: List[str] = ["01", "02", "04", "05", "07", "08"],
     mappe: Path = INNEKLIMA_DIR
 ) -> None:
     """
-    Tegner en Gantt-lignende oversikt over hvilke dager hvert rom har data på tvers av bygg.
+    Tegner en oversikt over hvilke dager hvert rom har data på tvers av bygg.
     Henter CSV for hvert bygg/rom via fetch_csv og set_datetime_index.
     """
     oversikt = []

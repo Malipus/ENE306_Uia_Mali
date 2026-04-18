@@ -1,10 +1,16 @@
 import pandas as pd
-from datetime import datetime
+import matplotlib.pyplot as plt
+import numpy as np
 
+from datetime import datetime
 from typing import List
+
 from data_processing import fetch_csv, set_datetime_index, filter_data, fetch_weather
 from plotting import plot_temperature, plot_humidity, plot_air_quality_variable
-from config import LUFTKVALITETS_VARIABLER_I_REKKE, INNEKLIMA_DIR
+from config import (LUFTKVALITETS_VARIABLER_I_REKKE, INNEKLIMA_DIR, THRESHOLDS_TEMPERATURE, THRESHOLDS_CRITICAL,
+                    THRESHOLDS_WARN, THRESHOLDS_OPTIMAL_HUMIDITY)
+
+
 
 TILGJENGELIGE_BYGG = {
     '01': 'Tønnevoldsgate 26, Sentrum',
@@ -14,6 +20,13 @@ TILGJENGELIGE_BYGG = {
     '07': 'Jon Lilletuns Vei 21, Campus',
     '08': 'Jon Lilletuns Vei 23, Campus'
 }
+
+PM_VARIABLER = [
+    "PM 1.0 (µg/m³)",
+    "PM 2.5 (µg/m³)",
+    "PM 4.0 (µg/m³)",
+    "PM 10 (µg/m³)"
+]
 
 
 def be_om_år(prompt="Skriv inn år (ÅÅÅÅ) eller 'b': "):
@@ -61,11 +74,11 @@ def run_building_analysis():
     for kode, navn in TILGJENGELIGE_BYGG.items():
         print(f"  Bygg {kode} – {navn}")
 
-    user_in = input("Velg bygg eller 'b' for å gå tilbake: ").strip().lower()
-    if user_in == 'b':
+    user_input = input("Velg bygg eller 'b' for å gå tilbake: ").strip().lower()
+    if user_input == 'b':
         return
 
-    byggkode = user_in.zfill(2)
+    byggkode = user_input.zfill(2)
     if byggkode not in TILGJENGELIGE_BYGG:
         print("❌ Ugyldig byggkode.")
         return
@@ -123,13 +136,13 @@ def velg_periode_og_variabel(
             if year is None:
                 continue
 
-        elif periode_valg == '2':  # Høst (10. august til 10. desember)
+        elif periode_valg == '2':  # Høst (fra august ut desember)
             mode = 'fall'
             year = be_om_år()
             if year is None:
                 continue
 
-        elif periode_valg == '3':  # Vår  (6. januar til 6. juni)
+        elif periode_valg == '3':  # Vår  (fra januar ut juni)
             mode = 'spring'
             year = be_om_år()
             if year is None:
@@ -203,47 +216,17 @@ def velg_periode_og_variabel(
             # ── 3) Kall riktig plot‐funksjon med korrekt argumentrekkefølge ──
             if valg_int == 1:
                 # Temperatur
-                plot_temperature(
-                    filtrerte_data,
-                    mode,
-                    year,
-                    month,
-                    week,
-                    day,
-                    weather_df,
-                    byggkode,   # passér byggkode først
-                    romnavn     # deretter liste over romnavn
-                )
+                plot_temperature(filtrerte_data, mode, year, month, week, day, weather_df, byggkode, romnavn)
 
             elif valg_int == 2:
                 # Luftfuktighet
-                plot_humidity(
-                    filtrerte_data,
-                    mode,
-                    year,
-                    month,
-                    week,
-                    day,
-                    weather_df,
-                    byggkode,
-                    romnavn
-                )
+                plot_humidity(filtrerte_data, mode, year, month, week, day, weather_df, byggkode, romnavn)
 
             elif 3 <= valg_int < 3 + len(LUFTKVALITETS_VARIABLER_I_REKKE):
                 # Luftkvalitetsvariabler (CO2, Formaldehyd, TVOC, PM osv.)
                 var_idx = valg_int - 3
                 variable = LUFTKVALITETS_VARIABLER_I_REKKE[var_idx]
-                plot_air_quality_variable(
-                    filtrerte_data,
-                    variable,
-                    mode,
-                    year,
-                    month,
-                    week,
-                    day,
-                    byggkode,
-                    romnavn
-                )
+                plot_air_quality_variable(filtrerte_data, variable, mode, year, month, week, day, byggkode, romnavn)
 
             else:
                 print("❌ Ugyldig valg.")
@@ -260,3 +243,158 @@ def gyldig_måned(inp: str) -> bool:
 
 def gyldig_uke(inp: str) -> bool:
     return inp.isdigit() and 1 <= int(inp) <= 53
+
+def filtrer_datointervall(df: pd.DataFrame, start_dato: str, slutt_dato: str) -> pd.DataFrame:
+    start = pd.to_datetime(start_dato)
+    slutt = pd.to_datetime(slutt_dato)
+    return df.loc[(df.index >= start) & (df.index <= slutt)]
+
+
+def samle_data_per_bygg(variabel: str, start_dato: str, slutt_dato: str):
+    bygg_data = []
+    bygg_labels = []
+
+    for byggkode, byggnavn in TILGJENGELIGE_BYGG.items():
+        dfs, romnavn, _ = fetch_csv(building_number=byggkode)
+
+        alle_verdier = []
+
+        for df in dfs:
+            df = set_datetime_index(df)
+            df = filtrer_datointervall(df, start_dato, slutt_dato)
+
+            if variabel in df.columns:
+                verdier = pd.to_numeric(df[variabel], errors="coerce").dropna()
+                if not verdier.empty:
+                    alle_verdier.extend(verdier.tolist())
+
+        if alle_verdier:
+            bygg_data.append(alle_verdier)
+            bygg_labels.append(f"{byggkode} - {byggnavn}")
+
+    return bygg_data, bygg_labels
+
+
+def plot_boksplott_per_bygg(variabel: str, start_dato: str, slutt_dato: str):
+    bygg_data, bygg_labels = samle_data_per_bygg(variabel, start_dato, slutt_dato)
+
+    if not bygg_data:
+        print(f"Ingen data funnet for {variabel} i valgt periode.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.boxplot(bygg_data, tick_labels=bygg_labels, vert=False)
+
+    tegn_terskellinjer(ax, variabel)
+
+    ax.set_xlabel(variabel)
+    ax.set_ylabel("Bygg")
+    ax.set_title(f"{variabel} \n{start_dato} til {slutt_dato}")
+    ax.grid(axis="x", alpha=0.3)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plot_pm_boksplott_per_bygg(start_dato: str, slutt_dato: str):
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+
+    for ax, variabel in zip(axes, PM_VARIABLER):
+        bygg_data, bygg_labels = samle_data_per_bygg(variabel, start_dato, slutt_dato)
+
+        if not bygg_data:
+            ax.set_title(f"{variabel}\nIngen data")
+            ax.axis("off")
+            continue
+
+        ax.boxplot(bygg_data, tick_labels=bygg_labels, vert=False)
+        tegn_terskellinjer(ax, variabel)
+        ax.set_title(variabel)
+        ax.set_xlabel("Konsentrasjon")
+        ax.set_ylabel("Bygg")
+        ax.grid(axis="x", alpha=0.3)
+        ax.legend()
+
+    plt.suptitle(f"Partikler \n{start_dato} til {slutt_dato}")
+    plt.tight_layout()
+    plt.show()
+
+def run_boxplot_alle_bygg():
+    print("\n📦 BOKSPLOTT ALLE BYGG")
+    print("1. Studieår 2023-08-10 til 2023-12-10")
+    print("2. Studieår 2024-01-10 til 2024-06-10")
+    print("3. Egendefinert periode")
+    print("b. Tilbake")
+
+    periodevalg = input("Velg periode: ").strip().lower()
+    if periodevalg == "b":
+        return
+
+    if periodevalg == "1":
+        start_dato = "2023-08-10"
+        slutt_dato = "2023-12-10"
+    elif periodevalg == "2":
+        start_dato = "2024-01-10"
+        slutt_dato = "2024-06-10"
+    elif periodevalg == "3":
+        start_dato = input("Startdato (ÅÅÅÅ-MM-DD): ").strip()
+        slutt_dato = input("Sluttdato (ÅÅÅÅ-MM-DD): ").strip()
+    else:
+        print("❌ Ugyldig valg.")
+        return
+
+    while True:
+        print("\n📊 VELG VARIABEL")
+        print("1. Temperatur (°C)")
+        print("2. Luftfuktighet (%)")
+        print("3. CO2 (ppm)")
+        print("4. Formaldehyd (µg/m³)")
+        print("5. TVOC (ppb)")
+        print("6. PM (alle fire i én figur)")
+        print("b. Tilbake")
+
+        valg = input("Valg: ").strip().lower()
+        if valg == "b":
+            return
+
+        variabler = {
+            "1": "Temperatur (°C)",
+            "2": "Luftfuktighet (%)",
+            "3": "CO2 (ppm)",
+            "4": "Formaldehyd (µg/m³)",
+            "5": "TVOC (ppb)"
+        }
+
+        if valg == "6":
+            plot_pm_boksplott_per_bygg(start_dato, slutt_dato)
+        elif valg in variabler:
+            plot_boksplott_per_bygg(variabler[valg], start_dato, slutt_dato)
+        else:
+            print("❌ Ugyldig valg.")
+            continue
+
+def tegn_terskellinjer(ax, variabel: str):
+    # Luftkvalitetsvariabler
+    if variabel in THRESHOLDS_CRITICAL:
+        terskel = THRESHOLDS_CRITICAL[variabel]
+        ax.axvline(terskel, linestyle="--", linewidth=2, label=f"Kritisk grense: {terskel}")
+
+    # Luftfuktighet
+    elif variabel == "Luftfuktighet (%)":
+        crit_min = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]["critical_min"]
+        crit_max = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]["critical_max"]
+
+        ax.axvline(crit_min, linestyle="--", linewidth=2, label=f"Kritisk min: {crit_min}")
+        ax.axvline(crit_max, linestyle="--", linewidth=2, label=f"Kritisk maks: {crit_max}")
+
+    # Temperatur
+    elif variabel == "Temperatur (°C)":
+        dag_min = THRESHOLDS_TEMPERATURE["day"]["min"]
+        dag_max = THRESHOLDS_TEMPERATURE["day"]["max"]
+        natt_min = THRESHOLDS_TEMPERATURE["night"]["min"]
+        natt_max = THRESHOLDS_TEMPERATURE["night"]["max"]
+
+        ax.axvline(dag_min, linestyle="--", linewidth=2, label=f"Dag/natt: {dag_min}")
+        ax.axvline(natt_min, linestyle=":", linewidth=2, label=f"Minimum: {natt_min}")
+        ax.axvline(dag_max, linestyle="--", linewidth=2, label=f"Maksimum: {dag_max}")
+        ax.axvline(natt_max, linestyle=":", linewidth=2, )
