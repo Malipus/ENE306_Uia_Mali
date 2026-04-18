@@ -3,6 +3,7 @@ import building_analysis
 import analysis
 import plotting
 
+# Hello does git work like i want it to.
 
 def vis_hovedmeny():
     print("\n📋 HOVEDMENY")
