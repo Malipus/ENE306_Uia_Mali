@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
+
 
 from datetime import datetime
 from typing import List
@@ -8,7 +8,7 @@ from typing import List
 from data_processing import fetch_csv, set_datetime_index, filter_data, fetch_weather
 from plotting import plot_temperature, plot_humidity, plot_air_quality_variable
 from config import (LUFTKVALITETS_VARIABLER_I_REKKE, INNEKLIMA_DIR, THRESHOLDS_TEMPERATURE, THRESHOLDS_CRITICAL,
-                    THRESHOLDS_WARN, THRESHOLDS_OPTIMAL_HUMIDITY)
+                    THRESHOLDS_OPTIMAL_HUMIDITY)
 
 
 
@@ -125,8 +125,8 @@ def velg_periode_og_variabel(
         if periode_valg == 'b':
             return  # Gå tilbake til hovedmeny
 
-        mode = None
-        year = month = week = None
+
+        month = week = None
         day = None
 
         # ── Sett mode + tilhørende år/måned/uke/dag ──

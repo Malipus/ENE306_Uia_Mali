@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE, INNEKLIMA_DIR)
 
 def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "07", filenames: Optional[List[str]] = None) -> Tuple[List[pd.DataFrame], List[str], int]:

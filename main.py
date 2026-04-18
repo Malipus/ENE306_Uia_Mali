@@ -3,36 +3,16 @@ import building_analysis
 import analysis
 import plotting
 
-# Hello does git work like i want it to.
 
 def vis_hovedmeny():
     print("\n📋 HOVEDMENY")
-    print("1. Utforsk data")
+    print("1. Fordeling (histogram) for én variabel (alle bygg/rom)")
     print("2. Bygg-analyse")
-    print("3. Datadekning per rom")
-    print("4. Dekningsgrad alle bygg")
-    print("5. Spredningsmål")
-    print("6. Timer over terskel")
-    print("7. Prosent over terskel global")
-    print("8. Boxplot")
+    print("3. Boxplot")
+    print("4. Tidsserie over én variabel (alle bygg/rom)")
+    print("5. Datadekning per rom")
     print("b. Avslutt")
 
-def run_data_exploration():
-    while True:
-        print("\n🔎 UTFORSK DATA")
-        print("1. Tidsserie over én variabel (alle bygg/rom)")
-        print("2. Fordeling (histogram) for én variabel (alle bygg/rom)")
-        print("b. Tilbake til hovedmeny")
-
-        valg = input("Velg et alternativ: ").strip().lower()
-        if valg == "1":
-            analysis.run_time_series()
-        elif valg == "2":
-            analysis.run_distribution()
-        elif valg == "b":
-            return
-        else:
-            print("❌ Ugyldig valg. Prøv igjen.")
 
 
 def main():
@@ -42,29 +22,15 @@ def main():
         valg = input("Velg et alternativ: ").strip().lower()
 
         if valg == "1":
-            run_data_exploration()
-
+            analysis.run_distribution()
         elif valg == "2":
-            building_analysis.run_building_analysis()
-
+            analysis.run_time_series()
         elif valg == "3":
-            plotting.vis_datadekning_per_rom()
-
-        elif valg == "4":
-            plotting.vis_dekningsgrad_alle_bygg()
-
-        elif valg == "5":
-            analysis.vis_spredningsmål()
-
-        elif valg == "6":
-            analysis.run_timer_over_terskel()
-
-        elif valg == "7":
-            analysis.run_prosent_over_terskel_global()
-
-        elif valg == "8":
             building_analysis.run_boxplot_alle_bygg()
-
+        elif valg == "4":
+            building_analysis.run_building_analysis()
+        elif valg == "5":
+            plotting.vis_datadekning_per_rom()
         elif valg == "b":
             print("Avslutter...")
             sys.exit(0)
