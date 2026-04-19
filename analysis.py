@@ -1,23 +1,349 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
-from data_processing import fetch_csv, set_datetime_index
-from plotting import plot_all_rooms_variable
-from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY,
-                    THRESHOLDS_WARN, THRESHOLDS_CRITICAL, TILGJENGELIGE_BYGG, VARIABLE_CHOICES)
+from data_processing import fetch_csv, set_datetime_index, filter_data, fetch_weather
+from plotting import (plot_all_rooms_variable,
+                    plot_temperature,
+                    plot_humidity,
+                    plot_building_boxplot,
+                    plot_pm_boxplots,
+                    plot_room_data_availability)
 
 
 
-def _collect_all_room_data(variable: str):
-    """
-    Henter hver rom‐DataFrame for alle bygg i TILGJENGELIGE_BYGG, setter datetime‐index,
-    filtrerer bort rom som ikke har kolonnen, og returnerer liste av DataFrames.
-    """
+from config import (THRESHOLDS_TEMPERATURE,
+                    THRESHOLDS_OPTIMAL_HUMIDITY,
+                    THRESHOLDS_WARN,
+                    THRESHOLDS_CRITICAL,
+                    VARIABLE_CHOICES,
+                    TILGJENGELIGE_BYGG,
+                    PM_VARIABLER)
+
+
+def format_scope_label(state):
+    if state["mode"] == "all":
+        return "Hele perioden"
+    elif state["mode"] == "year":
+        return f"År {state['year']}"
+    elif state["mode"] == "month":
+        return f"Måned {state['month']}/{state['year']}"
+    elif state["mode"] == "week":
+        return f"Uke {state['week']} i {state['year']}"
+    elif state["mode"] == "day" and state["day"] is not None:
+        return state["day"].strftime("%Y-%m-%d")
+    elif state["mode"] == "fall":
+        return f"Høst {state['year']}"
+    elif state["mode"] == "spring":
+        return f"Vår {state['year']}"
+    return "Ukjent periode"
+
+
+def collect_boxplot_data_by_building(variabel: str, state):
+    bygg_data = []
+    bygg_labels = []
+
+    for byggkode in state["buildings"]:
+        byggnavn = TILGJENGELIGE_BYGG.get(byggkode, byggkode)
+        dfs, _, _ = fetch_csv(building_number=byggkode)
+
+        alle_verdier = []
+
+        for df in dfs:
+            df = set_datetime_index(df)
+
+            filtrerte_liste = filter_data(
+                [df],
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"]
+            )
+
+            if not filtrerte_liste:
+                continue
+
+            df_filtrert = filtrerte_liste[0]
+
+            if variabel in df_filtrert.columns:
+                serie: pd.Series = pd.to_numeric(df_filtrert[variabel], errors="coerce")
+                verdier = serie.dropna()
+
+                if not verdier.empty:
+                    alle_verdier.extend(verdier.tolist())
+
+        if alle_verdier:
+            bygg_data.append(alle_verdier)
+            bygg_labels.append(f"{byggkode} - {byggnavn}")
+
+    return bygg_data, bygg_labels
+
+
+def run_boxplot_menu(state):
+    while True:
+        print("\n📦 BOKSPLOTT")
+        print("1. Temperatur (°C)")
+        print("2. Luftfuktighet (%)")
+        print("3. CO2 (ppm)")
+        print("4. Formaldehyd (µg/m³)")
+        print("5. TVOC (ppb)")
+        print("6. PM (alle fire i én figur)")
+        print("b. Tilbake")
+
+        valg = input("Valg: ").strip().lower()
+        if valg == "b":
+            return
+
+        variabler = {
+            "1": "Temperatur (°C)",
+            "2": "Luftfuktighet (%)",
+            "3": "CO2 (ppm)",
+            "4": "Formaldehyd (µg/m³)",
+            "5": "TVOC (ppb)"
+        }
+
+        scope_label = format_scope_label(state)
+
+        if valg == "6":
+            pm_plot_data = []
+
+            for variable in PM_VARIABLER:
+                building_data, building_labels = collect_boxplot_data_by_building(variable, state)
+                pm_plot_data.append((variable, building_data, building_labels))
+
+            plot_pm_boxplots(pm_plot_data, scope_label)
+
+        elif valg in variabler:
+            variable = variabler[valg]
+            building_data, building_labels = collect_boxplot_data_by_building(variable, state)
+            plot_building_boxplot(variable, building_data, building_labels, scope_label)
+
+        else:
+            print("❌ Ugyldig valg.")
+
+
+def print_active_scope(state):
+    byggtekst = ", ".join(state["buildings"]) if state["buildings"] else "Ingen bygg valgt"
+
+    if state["mode"] == "all":
+        periodetekst = "Hele perioden"
+    elif state["mode"] == "year":
+        periodetekst = f"År {state['year']}"
+    elif state["mode"] == "month":
+        periodetekst = f"Måned {state['month']}/{state['year']}"
+    elif state["mode"] == "week":
+        periodetekst = f"Uke {state['week']} i {state['year']}"
+    elif state["mode"] == "day" and state["day"] is not None:
+        periodetekst = state["day"].strftime("%Y-%m-%d")
+    elif state["mode"] == "fall":
+        periodetekst = f"Høst {state['year']}"
+    elif state["mode"] == "spring":
+        periodetekst = f"Vår {state['year']}"
+    else:
+        periodetekst = "Ukjent periode"
+
+    print("\nAktivt datasett:")
+    print(f"Bygg: {byggtekst}")
+    print(f"Periode: {periodetekst}")
+
+
+def prompt_year(prompt="Skriv inn år (ÅÅÅÅ) eller 'b': "):
+    inp = input(prompt).strip()
+    if inp.lower() == "b":
+        return None
+    if not (inp.isdigit() and len(inp) == 4 and 2000 <= int(inp) <= 2100):
+        print("❌ Ugyldig årstall. Prøv igjen.")
+        return prompt_year(prompt)
+    return int(inp)
+
+
+def prompt_month(prompt="Skriv inn måned (1–12) eller 'b': "):
+    inp = input(prompt).strip()
+    if inp.lower() == "b":
+        return None
+    if not (inp.isdigit() and 1 <= int(inp) <= 12):
+        print("❌ Ugyldig måned. Prøv igjen.")
+        return prompt_month(prompt)
+    return int(inp)
+
+
+def prompt_week(prompt="Skriv inn uke (1–53) eller 'b': "):
+    inp = input(prompt).strip()
+    if inp.lower() == "b":
+        return None
+    if not (inp.isdigit() and 1 <= int(inp) <= 53):
+        print("❌ Ugyldig uke. Prøv igjen.")
+        return prompt_week(prompt)
+    return int(inp)
+
+
+def prompt_day(prompt="Skriv inn dato (ÅÅÅÅ-MM-DD) eller 'b': "):
+    inp = input(prompt).strip()
+    if inp.lower() == "b":
+        return None
+
+    try:
+        return datetime.strptime(inp, "%Y-%m-%d")
+    except ValueError:
+        print("❌ Ugyldig datoformat eller ugyldig dato. Prøv igjen.")
+        return prompt_day(prompt)
+
+
+def reset_time_scope(state):
+    state["mode"] = "all"
+    state["year"] = None
+    state["month"] = None
+    state["week"] = None
+    state["day"] = None
+
+
+def select_building(state):
+    while True:
+        print("\nBYGGVALG")
+        print("1. Alle bygg")
+        print("2. Ett bygg")
+        print("b. Tilbake")
+
+        valg = input("Velg bygg: ").strip().lower()
+
+        if valg == "b":
+            return
+
+        if valg == "1":
+            state["buildings"] = list(TILGJENGELIGE_BYGG.keys())
+            print("✅ Alle bygg er valgt.")
+            return
+
+        if valg == "2":
+            print("\nTilgjengelige bygg:")
+            for kode, navn in TILGJENGELIGE_BYGG.items():
+                print(f"{kode} - {navn}")
+
+            byggkode = input("Skriv byggkode: ").strip().zfill(2)
+
+            if byggkode in TILGJENGELIGE_BYGG:
+                state["buildings"] = [byggkode]
+                print(f"✅ Bygg {byggkode} er valgt.")
+                return
+
+            print("❌ Ugyldig byggkode.")
+            continue
+
+        print("❌ Ugyldig valg.")
+
+
+def select_time_scope(state):
+    while True:
+        print("\nTIDSVALG")
+        print("1. Hele perioden")
+        print("2. År")
+        print("3. Høst")
+        print("4. Vår")
+        print("5. Måned")
+        print("6. Uke")
+        print("7. Dag")
+        print("b. Tilbake")
+
+        valg = input("Velg periode: ").strip().lower()
+
+        if valg == "b":
+            return
+
+        if valg == "1":
+            reset_time_scope(state)
+            print("✅ Hele perioden er valgt.")
+            return
+
+        if valg == "2":
+            år = prompt_year()
+            if år is None:
+                continue
+            reset_time_scope(state)
+            state["mode"] = "year"
+            state["year"] = år
+            print(f"✅ År {år} er valgt.")
+            return
+
+        if valg == "3":
+            år = prompt_year()
+            if år is None:
+                continue
+            reset_time_scope(state)
+            state["mode"] = "fall"
+            state["year"] = år
+            print(f"✅ Høst {år} er valgt.")
+            return
+
+        if valg == "4":
+            år = prompt_year()
+            if år is None:
+                continue
+            reset_time_scope(state)
+            state["mode"] = "spring"
+            state["year"] = år
+            print(f"✅ Vår {år} er valgt.")
+            return
+
+        if valg == "5":
+            år = prompt_year()
+            if år is None:
+                continue
+            måned = prompt_month()
+            if måned is None:
+                continue
+            reset_time_scope(state)
+            state["mode"] = "month"
+            state["year"] = år
+            state["month"] = måned
+            print(f"✅ Måned {måned}/{år} er valgt.")
+            return
+
+        if valg == "6":
+            år = prompt_year()
+            if år is None:
+                continue
+            uke = prompt_week()
+            if uke is None:
+                continue
+            reset_time_scope(state)
+            state["mode"] = "week"
+            state["year"] = år
+            state["week"] = uke
+            print(f"✅ Uke {uke} i {år} er valgt.")
+            return
+
+        if valg == "7":
+            dag = prompt_day()
+            if dag is None:
+                continue
+            reset_time_scope(state)
+            state["mode"] = "day"
+            state["year"] = dag.year
+            state["month"] = dag.month
+            state["week"] = int(dag.strftime("%W"))
+            state["day"] = dag
+            print(f"✅ Dag {dag.strftime('%Y-%m-%d')} er valgt.")
+            return
+
+        print("❌ Ugyldig valg.")
+
+
+def configure_scope(state):
+    print("\nVELG DATASETT")
+    select_building(state)
+    select_time_scope(state)
+    print_active_scope(state)
+
+
+def _collect_all_room_data(variable: str, state, rename_to_value: bool = True):
+
     all_dfs = []
     all_labels = []
 
-    for bygg in TILGJENGELIGE_BYGG:
+
+    for bygg in state["buildings"]:
         try:
             dfs_bygg, romnavn, _ = fetch_csv(building_number=bygg)
         except Exception as e:
@@ -26,26 +352,51 @@ def _collect_all_room_data(variable: str):
 
         for df, rom in zip(dfs_bygg, romnavn):
             df2 = set_datetime_index(df)
-            if variable not in df2.columns:
+
+            filtrerte_liste = filter_data(
+                [df2],
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"]
+            )
+
+            if not filtrerte_liste:
                 continue
 
-            # Lag ny kolonne “Value” med bare én variabel
-            df3 = df2[[variable]].copy()
-            df3.rename(columns={variable: "Value"}, inplace=True)
+            df_filtrert = filtrerte_liste[0]
+
+            if variable not in df_filtrert.columns:
+                continue
+
+            df3 = df_filtrert[[variable]].copy()
+            if rename_to_value:
+                df3.rename(columns={variable: "Value"}, inplace=True)
 
             all_dfs.append(df3)
-            all_labels.append(f"B{bygg}-R{rom}")
 
+            if len(state["buildings"]) == 1:
+                all_labels.append(f"R{rom}")
+            else:
+                all_labels.append(f"B{bygg}-R{rom}")
     return all_dfs, all_labels
 
-def run_time_series():
-    """
-    Hovedmeny for å plotte tidsserie for én valgt variabel på tvers av alle bygg/rom.
-    Etter ett plott kan brukeren taste ny variabelkode for nytt plott,
-    eller 'b' for å gå tilbake til forrige meny.
-    """
+
+def _spør_om_uteklima_sammenligning() -> bool:
     while True:
-        # 1) Velg variabel
+        valg = input("Vil du sammenligne med uteklima? (j/n): ").strip().lower()
+
+        if valg in {"j", "ja"}:
+            return True
+        if valg in {"n", "nei"}:
+            return False
+
+        print("❌ Ugyldig valg. Skriv 'j' eller 'n'.")
+
+
+def run_time_series(state):
+    while True:
         print("\n📊 VELG VARIABEL FOR TIDSSERIEPLOTT")
         for key, var in VARIABLE_CHOICES.items():
             print(f"{key}. {var}")
@@ -53,7 +404,8 @@ def run_time_series():
 
         valg = input("Valg: ").strip().lower()
         if valg == 'b':
-            return  # Gå tilbake til hovedmeny
+            return
+
         if valg not in VARIABLE_CHOICES:
             print("❌ Ugyldig valg. Prøv igjen.")
             continue
@@ -61,34 +413,92 @@ def run_time_series():
         variable = VARIABLE_CHOICES[valg]
         print(f"👉 Du har valgt: {variable}")
 
-        # 2) Hent alle rom‐data for den valgte variabelen:
-        dfs, rom_labels = _collect_all_room_data(variable)
+        compare_weather = False
+        if variable in {"Temperatur (°C)", "Luftfuktighet (%)"}:
+            compare_weather = _spør_om_uteklima_sammenligning()
+
+        dfs, rom_labels = _collect_all_room_data(
+            variable,
+            state,
+            rename_to_value=not compare_weather
+        )
+
         if not dfs:
-            print(f"❌ Ingen data funnet for variabelen '{variable}'.")
-            # Returner til toppen av loop slik at brukeren kan taste ny kode
+            print(f"❌ Ingen data funnet for variabelen '{variable}' i valgt datasett.")
             continue
 
-        # 3) Plot tidsserien over hele perioden
-        plot_all_rooms_variable(dfs, variable)
+        if compare_weather:
+            try:
+                weather_df = fetch_weather()
+            except Exception as e:
+                print(f"❌ Klarte ikke hente uteklima: {e}")
+                continue
 
-        continue
+            title_subject = (
+                f"Bygg {state['buildings'][0]}"
+                if len(state["buildings"]) == 1
+                else "Valgte bygg"
+            )
+
+            if variable == "Temperatur (°C)":
+                plot_temperature(
+                    dfs,
+                    mode=state["mode"],
+                    year=state["year"],
+                    month=state["month"],
+                    week=state["week"],
+                    day=state["day"],
+                    df_weather=weather_df,
+                    romnavn=rom_labels,
+                    title_subject=title_subject
+                )
+            else:
+                plot_humidity(
+                    dfs,
+                    mode=state["mode"],
+                    year=state["year"],
+                    month=state["month"],
+                    week=state["week"],
+                    day=state["day"],
+                    df_weather=weather_df,
+                    romnavn=rom_labels,
+                    title_subject=title_subject
+                )
+        else:
+            title_subject = (
+                f"Bygg {state['buildings'][0]}"
+                if len(state["buildings"]) == 1
+                else "Valgte bygg"
+            )
+
+            plot_all_rooms_variable(
+                dfs,
+                variable,
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"],
+                title_subject=title_subject,
+            )
 
 
-def run_distribution():
+
+def run_distribution(state):
     """
-    Hovedmeny for å plotte fordeling (histogram) for én variabel på tvers av alle rom/bygg.
-    Løkker slik at brukeren kan taste nytt valg umiddelbart etter plottet lukkes.
+    Hovedmeny for å plotte fordeling (histogram) for én variabel
+    på tvers av valgte bygg og valgt periode i state.
     """
     while True:
-        # 1) Velg variabel
         print("\n📊 VELG VARIABEL FOR FORDELINGSPLOTT")
         for key, var in VARIABLE_CHOICES.items():
             print(f"{key}. {var}")
-        print("b. Tilbake til forrige meny")
+        print("b. Tilbake til hovedmeny")
 
         valg = input("Valg: ").strip().lower()
         if valg == 'b':
-            return  # Ut av run_distribution tilbake til forrige meny
+            return
+
         if valg not in VARIABLE_CHOICES:
             print("❌ Ugyldig valg. Prøv igjen.")
             continue
@@ -96,25 +506,17 @@ def run_distribution():
         variable = VARIABLE_CHOICES[valg]
         print(f"\n👉 Du har valgt: {variable}")
 
-        # 2) Hent alle rom‐data og samle alle verdier i én Series
-        serie = _collect_all_values_for_variable(variable)
+        serie = _collect_all_values_for_variable(variable, state)
         if serie is None or serie.empty:
-            print(f"❌ Ingen data funnet for variabelen '{variable}'.")
-            # Fortsett for å spørre om ny variabel
+            print(f"❌ Ingen data funnet for variabelen '{variable}' i valgt datasett.")
             continue
 
-        # 3) Plot histogram for valgte variabel
         _plot_distribution(serie, variable)
-        # Når brukeren lukker plottvinduet, kommer vi hit og går tilbake til starten av løkka
 
 
-def _collect_all_values_for_variable(variable: str) -> pd.Series:
-    """
-    Henter alle data for én variabel, på tvers av alle rom/bygg,
-    legger dem i én stor Pandas‐Series, og returnerer denne.
-    """
+def _collect_all_values_for_variable(variable: str, state) -> pd.Series:
     samling = []
-    for bygg in TILGJENGELIGE_BYGG:
+    for bygg in state["buildings"]:
         try:
             dfs_bygg, romnavn, _ = fetch_csv(building_number=bygg)
         except Exception as e:
@@ -123,110 +525,38 @@ def _collect_all_values_for_variable(variable: str) -> pd.Series:
 
         for df, rom in zip(dfs_bygg, romnavn):
             df2 = set_datetime_index(df)
-            if variable not in df2.columns:
+
+            filtrerte_liste = filter_data(
+                [df2],
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"]
+            )
+
+            if not filtrerte_liste:
                 continue
-            # Fjern rader uten data
-            serie = df2[variable].dropna()
+
+            df_filtrert = filtrerte_liste[0]
+
+            if variable not in df_filtrert.columns:
+                continue
+
+            serie = df_filtrert[variable].dropna()
             if serie.empty:
                 continue
+
             samling.append(serie)
 
     if not samling:
-        return pd.Series(dtype='float64')
+        return pd.Series(dtype="float64")
 
-    # Slå sammen i én Series (multi‐index blir ignorert; vi beholder bare verdier)
     samlet = pd.concat(samling, axis=0)
     return samlet
 
 
-def _plot_time_series_all_rooms(dfs: list, labels: list, variable: str):
-    """
-    Plott tidsserie for alle romene (liste av times‐resamplede DataFrames).
-    Setter terskel‐linjer automatisk basert på variable, tilpasser akser og tittel.
-    """
-    # 1) Finn terskel‐verdier og farger for den valgte variable
-    y_label = variable
-    title_prefix = f"{variable}"
-
-    if variable == "Temperatur (°C)":
-        # Dag/natt, maks dag, min natt
-        day_min = THRESHOLDS_TEMPERATURE["day"]["min"]
-        day_max = THRESHOLDS_TEMPERATURE["day"]["max"]
-        night_min = THRESHOLDS_TEMPERATURE["night"]["min"]
-        thresholds = [
-            (day_min,   "black",  "Grense dag/natt"),
-            (day_max,   "orange", "Maks dagtemperatur"),
-            (night_min, "purple", "Min nattetemperatur")
-        ]
-
-    elif variable == "Luftfuktighet (%)":
-        # Optimal + kritiske grenser
-        grenser = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]
-        thresholds = [
-            (grenser["optimal_min"], "green",   "Optimal fuktighet (min)"),
-            (grenser["optimal_max"], "green",   "Optimal fuktighet (max)"),
-            (grenser["critical_min"], "red",    "Kritisk fuktighet (min)"),
-            (grenser["critical_max"], "red",    "Kritisk fuktighet (max)")
-        ]
-
-    else:
-        # Luftkvalitets‐variable (CO2, TVOC, PM osv.) bruker varsels + kritiske terskler
-        warn_value = THRESHOLDS_WARN.get(variable)
-        crit_value = THRESHOLDS_CRITICAL.get(variable)
-        if warn_value is not None and crit_value is not None:
-            thresholds = [
-                (warn_value, "orange", "Varselgrense"),
-                (crit_value, "red",    "Kritisk grense")
-            ]
-        else:
-            thresholds = []
-
-    # 2) Bygg en felles plott‐figur
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # 3) Tegn én kurve per rom
-    for df2, label in zip(dfs, labels):
-        # df2 har bare én kolonne kalt "Value"
-        ax.plot(df2.index, df2["Value"], label=label, linewidth=1)
-
-    # 4) Tegn terskel‐linjer horisontalt
-    for lvl, farge, etikett in thresholds:
-        ax.axhline(y=lvl, color=farge, linestyle='--', linewidth=1.5, label=etikett)
-
-    # 5) Legg på tittel
-    ax.set_title(f"{title_prefix} – Tidsserie for alle rom")
-    ax.set_ylabel(y_label)
-    ax.set_xlabel("Dato/tid")
-
-    # 6) Legg til legend UTENFOR aksen til høyre
-    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), title="Rom og terskler")
-
-    # 7) Stram opp layout slik det er plass til legend‐boksen
-    fig.subplots_adjust(right=0.75)
-
-    plt.grid(True, linestyle=':', linewidth=0.5)
-    plt.tight_layout()
-    plt.show()
-
-
 def _plot_distribution(serie: pd.Series, variable: str):
-    """
-    Plott fordeling av én variabel på tvers av alle rom/bygg, med faste bin‐bredder
-    og manuelle x‐aksebegrensninger (ZOOM ved hjelp av set_xlim).
-    Terskelverdiene hentes fra config og vises som vertikale streker.
-    Y‐aksen starter på 0.
-
-    - Temperatur: 10–35 °C, 1 °C per søyle (heltall på x‐aksen)
-    - Luftfuktighet: 15–75 %, 2 % per søyle
-    - CO₂: 400–1200 ppm, 30 ppm per søyle (med 5 ppm venstremarg)
-    - Formaldehyd: 0–125 µg/m³, 20 µg/m³ per søyle
-    - TVOC: 0–1500 ppb, 30 ppb per søyle
-    - PM 1.0: 0–40 µg/m³, 5 µg/m³ per søyle
-    - PM 2.5: 0–40 µg/m³, 5 µg/m³ per søyle
-    - PM 4:  0–40 µg/m³, 25 µg/m³ per søyle
-    - PM 10: 0–110 µg/m³, 5 µg/m³ per søyle
-    """
-
     # 1) Hent terskelverdier
     terskelverdier = []
     if variable == "Temperatur (°C)":
@@ -380,3 +710,7 @@ def _plot_distribution(serie: pd.Series, variable: str):
     ax.grid(axis="y", linestyle="--", alpha=0.5)
     plt.tight_layout()
     plt.show()
+
+
+def run_data_availability(state):
+    plot_room_data_availability(state)

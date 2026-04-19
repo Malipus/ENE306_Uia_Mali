@@ -1,6 +1,4 @@
 # plotting.py
-
-import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -11,21 +9,46 @@ from matplotlib.legend import Legend
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
 from matplotlib.ticker import FixedLocator, FixedFormatter
 
-from typing import List, Optional, Union, Dict
+from typing import List, Optional
 from pathlib import Path
 
 from data_processing import (INNEKLIMA_DIR, fetch_csv, set_datetime_index, filter_data, filter_weather)
-
 from config import (THRESHOLDS_TEMPERATURE, THRESHOLDS_OPTIMAL_HUMIDITY, THRESHOLDS_WARN, THRESHOLDS_CRITICAL,
-                    TILGJENGELIGE_BYGG)
+                    NORWEGIAN_MONTHS)
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  1) plot_temperature
-# ──────────────────────────────────────────────────────────────────────────────
 
-def plot_temperature(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[int] = None,
+def format_period_label(
+    mode: str = "all",
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    week: Optional[int] = None,
+    day: Optional[pd.Timestamp] = None,
+) -> str:
+    if mode == "all":
+        return "hele måleperioden"
+    if mode == "year" and isinstance(year, int):
+        return f"år {year}"
+    if mode == "month" and isinstance(year, int) and isinstance(month, int):
+        return f"{NORWEGIAN_MONTHS[month]} {year}"
+    if mode == "week" and isinstance(year, int) and isinstance(week, int):
+        return f"uke {week} i {year}"
+    if mode == "day" and isinstance(day, pd.Timestamp):
+        return day.strftime("%d.%m.%Y")
+    if mode == "fall" and isinstance(year, int):
+        return f"høstperioden {year}"
+    if mode == "spring" and isinstance(year, int):
+        return f"vårperioden {year}"
+    return "valgt periode"
+
+def build_plot_title(subject: str, metric: str, period_label: str) -> str:
+    return f"{subject} – {metric} i {period_label}"
+
+def plot_temperature(df_list: List[pd.DataFrame],
+                     mode: str = "year", year: Optional[int] = None,
     month: Optional[int] = None, week: Optional[int] = None, day: Optional[pd.Timestamp] = None,
-    df_weather: Optional[pd.DataFrame] = None, byggkode: str = "", romnavn: Optional[List[str]] = None) -> None:
+    df_weather: Optional[pd.DataFrame] = None, byggkode: str = "", romnavn: Optional[List[str]] = None,
+    title_subject: Optional[str] = None) -> None:
+
 
     if romnavn is None:
         romnavn = []
@@ -215,25 +238,12 @@ def plot_temperature(df_list: List[pd.DataFrame], mode: str = "year", year: Opti
     ax.tick_params(axis="x", labelrotation=0, labelsize=9)
 
     # 10) Sett tittel kun med byggkode og periode
-    periode_str = ""
-    if mode == "year" and isinstance(year, int):
-        periode_str = f"{year}"
-    elif mode == "month" and isinstance(year, int) and isinstance(month, int):
-        maaned_navn = pd.to_datetime(f"{month}", format="%m").strftime("%B")
-        periode_str = f"{maaned_navn} {year}"
-    elif mode == "week" and isinstance(year, int) and isinstance(week, int):
-        start_date = pd.to_datetime(f"{year}-W{int(week):02d}-1", format="%Y-W%W-%w")
-        end_date = start_date + pd.Timedelta(days=6)
-        periode_str = f"Uke {week} {year} ({start_date.strftime('%d. %b')}–{end_date.strftime('%d. %b')})"
-    elif mode == "day" and isinstance(day, pd.Timestamp):
-        dato_str = day.strftime("%-d. %b %Y") if os.name != "nt" else day.strftime("%#d. %b %Y")
-        periode_str = f"{dato_str}"
-    elif mode == "spring" and isinstance(year, int):
-        periode_str = f"Vaaren {year}"
-    elif mode == "fall" and isinstance(year, int):
-        periode_str = f"Hosten {year}"
+    period_label = format_period_label(mode, year, month, week, day)
 
-    ax.set_title(f"Bygg {byggkode} – Temperatur for {periode_str}")
+    if title_subject is None:
+        title_subject = f"Bygg {byggkode}" if byggkode else "Valgte rom"
+
+    ax.set_title(build_plot_title(title_subject, "temperatur", period_label))
 
     # 11) Legend for rom
     if room_lines:
@@ -276,8 +286,11 @@ def plot_humidity(
     day: Optional[pd.Timestamp] = None,
     df_weather: Optional[pd.DataFrame] = None,
     byggkode: str = "",
-    romnavn: Optional[List[str]] = None
+    romnavn: Optional[List[str]] = None,
+    title_subject: Optional[str] = None
 ) -> None:
+
+
     if romnavn is None:
         romnavn = []
     """
@@ -466,25 +479,12 @@ def plot_humidity(
     ax.tick_params(axis="x", labelrotation=0, labelsize=9)
 
     # 10) Sett tittel kun med byggkode og periode
-    periode_str = ""
-    if mode == "year" and isinstance(year, int):
-        periode_str = f"{year}"
-    elif mode == "month" and isinstance(year, int) and isinstance(month, int):
-        maaned_navn = pd.to_datetime(f"{month}", format="%m").strftime("%B")
-        periode_str = f"{maaned_navn} {year}"
-    elif mode == "week" and isinstance(year, int) and isinstance(week, int):
-        start_date = pd.to_datetime(f"{year}-W{int(week):02d}-1", format="%Y-W%W-%w")
-        end_date = start_date + pd.Timedelta(days=6)
-        periode_str = f"Uke {week} {year} ({start_date.strftime('%d. %b')}–{end_date.strftime('%d. %b')})"
-    elif mode == "day" and isinstance(day, pd.Timestamp):
-        dato_str = day.strftime("%-d. %b %Y") if os.name != "nt" else day.strftime("%#d. %b %Y")
-        periode_str = f"{dato_str}"
-    elif mode == "spring" and isinstance(year, int):
-        periode_str = f"Vaarsemester {year}"
-    elif mode == "fall" and isinstance(year, int):
-        periode_str = f"Hostsemester {year}-{year+1}"
+    period_label = format_period_label(mode, year, month, week, day)
 
-    ax.set_title(f"Bygg {byggkode} – Luftfuktighet for {periode_str}")
+    if title_subject is None:
+        title_subject = f"Bygg {byggkode}" if byggkode else "Valgte rom"
+
+    ax.set_title(build_plot_title(title_subject, "temperatur", period_label))
 
     # 11) Legend for rom
     if room_lines:
@@ -517,249 +517,18 @@ def plot_humidity(
 
     plt.show()
 
-def plot_air_quality_variable(
-df_list: List[pd.DataFrame],
+
+
+def plot_all_rooms_variable(
+    df_list: List[pd.DataFrame],
     variable: str,
-    mode: str = "year",
+    mode: str = "all",
     year: Optional[int] = None,
     month: Optional[int] = None,
     week: Optional[int] = None,
     day: Optional[pd.Timestamp] = None,
-    byggkode: Union[str, int, List] = "",
-    romnavn: Optional[List[str]] = None) -> None:
-
-    if romnavn is None:
-        romnavn = []
-    """
-    Plotter luftkvalitetsvariabler (CO2, TVOC, PM osv.) som tidsserie for alle rom.
-    Henter varsel- og kritisk grense fra THRESHOLDS_WARN/THRESHOLDS_CRITICAL, og legger dem
-    som horisontale linjer. Y-aksen begrenses til 2× hoyeste terskelverdi.
-    Tittelen viser kun én byggkode (uten ledende 0 eller lister).
-    """
-
-    # 1) Filtrer innendorsdata i valgt periode
-    df_filtered_list = filter_data(df_list, mode, year, month, week, day)
-    if not df_filtered_list:
-        print(f"❌ Ingen data for '{variable}' i den valgte perioden.")
-        return
-
-    # 2) Hent terskelverdier fra config
-    warn_value     = THRESHOLDS_WARN.get(variable)
-    critical_value = THRESHOLDS_CRITICAL.get(variable)
-    if warn_value is None or critical_value is None:
-        print(f"❌ Ingen terskelverdier definert for '{variable}'.")
-        return
-
-    # Finn hoyeste terskelverdi og sett ovre grense for y-akse (2×)
-    maks_terskel = max(warn_value, critical_value)
-    y_upper = maks_terskel * 2
-
-    # Bygg liste med terskellinjer (forst varsel, saa kritisk)
-    thresholds = [
-        (warn_value,     "orange", "Varselgrense"),
-        (critical_value, "red",    "Kritisk grense")
-    ]
-
-    # 3) Opprett figur/akse
-    fig, ax = plt.subplots(figsize=(12, 6))
-    romfarger = cm.get_cmap("tab10")
-
-    room_lines = []
-    room_labels = []
-
-    # 4) Plot hver romserie (kolonnen 'variable') som tidsserie
-    for idx, df2 in enumerate(df_filtered_list, start=1):
-        if variable not in df2.columns or df2.empty:
-            continue
-
-        # a) Fjern hull > 1 time → NaN
-        gap_thr = pd.Timedelta(hours=1)
-        df_sort = df2.sort_index().copy()
-        df_sort["Time Diff"] = df_sort.index.to_series().diff()
-        df_sort.loc[df_sort["Time Diff"] > gap_thr, variable] = pd.NA
-        df_sort.drop(columns=["Time Diff"], inplace=True)
-
-        # b) Reindekser til timeserie
-        start = df_sort.index.min()
-        slutt = df_sort.index.max()
-        full_idx = pd.date_range(start=start, end=slutt, freq="1h")
-        series = df_sort[variable].reindex(full_idx)
-
-        # c) Finn romnavn (hvis gitt), ellers fallback "Rom {idx}"
-        navn = romnavn[idx-1] if idx-1 < len(romnavn) else f"Rom {idx}"
-        line, = ax.plot(
-            series.index,
-            series.values,
-            label=navn,
-            color=romfarger((idx - 1) % 10),
-            linewidth=2
-        )
-        room_lines.append(line)
-        room_labels.append(navn)
-
-        if mode == "day":
-            ax.scatter(
-                series.index,
-                series.values,
-                color=romfarger((idx - 1) % 10),
-                s=10,
-                zorder=5
-            )
-
-    ax.set_ylabel(variable)
-    ax.grid(True)
-
-    # 5) Tegn terskellinjer
-    threshold_handles = []
-    threshold_labels = []
-    brukt = set()
-    for nivaa, farge, etikett in thresholds:
-        if etikett not in brukt:
-            h = ax.axhline(
-                y=nivaa,
-                color=farge,
-                linestyle="--",
-                linewidth=1.5,
-                label=etikett
-            )
-            threshold_handles.append(h)
-            threshold_labels.append(etikett)
-            brukt.add(etikett)
-        else:
-            ax.axhline(y=nivaa, color=farge, linestyle="--", linewidth=1.5)
-
-    # 6) Begrens y-akse til 0–2×maks terskel
-    ax.set_ylim(0, y_upper)
-
-    # 7) Bestem x‐aksens visningsintervall
-    if mode == "day" and isinstance(day, pd.Timestamp):
-        start_vis = day.replace(hour=0, minute=0, second=0)
-        slutt_vis = start_vis + pd.Timedelta(days=1)
-    elif mode == "week" and isinstance(year, int) and isinstance(week, int):
-        ref = pd.to_datetime(f"{year}-W{int(week):02d}-1", format="%Y-W%W-%w")
-        start_vis = ref.replace(hour=0, minute=0, second=0)
-        slutt_vis = start_vis + pd.Timedelta(days=7)
-    elif mode == "month" and isinstance(year, int) and isinstance(month, int):
-        start_vis = pd.to_datetime(f"{year}-{month:02d}-01")
-        slutt_vis = start_vis + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)
-    elif mode == "year" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-01-01")
-        slutt_vis = pd.to_datetime(f"{year}-12-31") + pd.Timedelta(days=1)
-    elif mode == "fall" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-08-10")
-        slutt_vis = pd.to_datetime(f"{year}-12-10") + pd.Timedelta(days=1)
-    elif mode == "spring" and isinstance(year, int):
-        start_vis = pd.to_datetime(f"{year}-01-06")
-        slutt_vis = pd.to_datetime(f"{year}-06-06") + pd.Timedelta(days=1)
-    else:
-        alle_min = min(df.index.min() for df in df_filtered_list if not df.empty)
-        alle_max = max(df.index.max() for df in df_filtered_list if not df.empty)
-        start_vis, slutt_vis = alle_min, alle_max + pd.Timedelta(hours=1)
-
-    ax.set_xlim(start_vis, slutt_vis)
-
-    # 8) Formater x‐akse etter periode
-    if mode in ["year", "fall", "spring", "all"]:
-        ax.xaxis.set_major_locator(YearLocator())
-        ax.xaxis.set_major_formatter(DateFormatter("%Y"))
-        ax.xaxis.set_minor_locator(MonthLocator())
-        ax.xaxis.set_minor_formatter(DateFormatter("%b"))
-        ax.tick_params(axis="x", which="minor", labelsize=8, rotation=0, pad=10)
-        for lbl in ax.get_xticklabels(minor=True):
-            txt = lbl.get_text()
-            lbl.set_text(txt[0] if txt else "")
-        ax.grid(True, axis="x", which="minor", linestyle=":", linewidth=0.4)
-    elif mode == "month":
-        ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
-        ax.xaxis.set_major_formatter(DateFormatter("%d."))
-    elif mode == "week":
-        start_dag = start_vis.normalize()
-        dag_ticks = [start_dag + pd.Timedelta(days=i) for i in range(7)] + [slutt_vis]
-        ax.xaxis.set_major_locator(FixedLocator([mdates.date2num(d) for d in dag_ticks]))
-        ax.xaxis.set_major_formatter(FixedFormatter(["man","tir","ons","tor","fre","lor","son",""]))
-    elif mode == "day":
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-        ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-
-    ax.tick_params(axis="x", labelrotation=0, labelsize=9)
-
-    # 9) Sett tittel med kun ett byggnummer
-    if isinstance(byggkode, (list, tuple)) and len(byggkode) > 0:
-        # Dersom byggkode ble sendt inn som liste, trekk ut forste element
-        forste = byggkode[0]
-        bygge_nummer = int(forste) if str(forste).isdigit() else forste
-    else:
-        # Fjern ledende nuller hvis byggkode er streng med tall
-        if isinstance(byggkode, str) and byggkode.isdigit():
-            bygge_nummer = int(byggkode)
-        else:
-            bygge_nummer = byggkode
-
-    if mode == "year" and isinstance(year, int):
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for {year}")
-    elif mode == "spring" and isinstance(year, int):
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for hosten {year}")
-    elif mode == "fall" and isinstance(year, int):
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for vaaren {year}")
-    elif mode == "month" and isinstance(year, int) and isinstance(month, int):
-        maaned_navn = pd.to_datetime(f"{month}", format="%m").strftime("%B")
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for {maaned_navn} {year}")
-    elif mode == "week" and isinstance(year, int) and isinstance(week, int):
-        start_date = pd.to_datetime(f"{year}-W{int(week):02d}-1", format="%Y-W%W-%w")
-        end_date = start_date + pd.Timedelta(days=6)
-        ax.set_title(
-            f"Bygg {bygge_nummer} – {variable} for Uke {week} {year} "
-            f"({start_date.strftime('%d. %b')}–{end_date.strftime('%d. %b')})"
-        )
-    elif mode == "day" and isinstance(day, pd.Timestamp):
-        dato_str = day.strftime("%-d. %b %Y") if os.name != "nt" else day.strftime("%#d. %b %Y")
-        ax.set_title(f"Bygg {bygge_nummer} – {variable} for {dato_str}")
-
-    # 10) Legend for rom‐seriene
-    if room_lines:
-        rom_legend = ax.legend(
-            room_lines,
-            room_labels,
-            loc="upper left",
-            bbox_to_anchor=(1, 1),
-            title="Rom",
-            frameon=True
-        )
-        ax.add_artist(rom_legend)
-
-    # 11) Legend for terskellinjene
-    if threshold_handles:
-        ax.legend(
-            threshold_handles,
-            threshold_labels,
-            loc="lower left",
-            bbox_to_anchor=(1, 0),
-            title="Grenser",
-            frameon=True
-        )
-
-    # 12) Juster marger manuelt (unngaa tight_layout-advarsel)
-    fig.subplots_adjust(left=0.08, right=0.80, top=0.92, bottom=0.10)
-
-    plt.show()
-
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  4) plot_all_rooms_variable
-# ──────────────────────────────────────────────────────────────────────────────
-def plot_all_rooms_variable(df_list: List[pd.DataFrame], variable: str) -> None:
-    """
-    Plotter én variabel for alle rom over hele perioden (mode="all").
-    - Tids‐gaps (>1 time uten maaling) gir hull i linjene.
-    - Ingen rom‐legend; kun terskellinjers legend.
-    - Terskler per variabel.
-    - y_max = 3 * kritisk nivaa for alle andre enn temperatur og fuktighet.
-    - Temperatur: y_min=10, y_max=35.
-    - Luftfuktighet: autolimit (ingen fast y_bunn).
-    - CO2/Formaldehyd/PM: y_min=0, y_max=3×kritisk nivaa.
-    - X‐akse: Major ticks = aar, Minor ticks = maanedsbokstav.
-    """
+    title_subject: str = "Valgte rom",
+) -> None:
 
 
     if variable == "Temperatur (°C)":
@@ -858,7 +627,9 @@ def plot_all_rooms_variable(df_list: List[pd.DataFrame], variable: str) -> None:
     if y_min is not None or y_max is not None:
         ax.set_ylim(bottom=y_min, top=y_max)
 
-    ax.set_title(f"{variable} – Tidsserie for alle rom (hele perioden)", fontsize=14, pad=12)
+    period_label = format_period_label(mode, year, month, week, day)
+    ax.set_title(build_plot_title(title_subject, variable, period_label), fontsize=14, pad=12)
+
     ax.set_ylabel(y_label, fontsize=12)
     ax.set_xlabel("")
 
@@ -886,183 +657,9 @@ def plot_all_rooms_variable(df_list: List[pd.DataFrame], variable: str) -> None:
     plt.show()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  5) plot_all_pm_subplots
-# ──────────────────────────────────────────────────────────────────────────────
-def plot_all_pm_subplots(pm_data: Dict[str, List[pd.DataFrame]]) -> None:
-    """
-    Lager én figur med 4 subplots (2x2), én for hver PM‐variabel:
-      - PM 1.0 (µg/m³)
-      - PM 2.5 (µg/m³)
-      - PM 4.0 (µg/m³)
-      - PM 10  (µg/m³)
-    """
-    pm_vars = [
-        "PM 1.0 (µg/m³)",
-        "PM 2.5 (µg/m³)",
-        "PM 4.0 (µg/m³)",
-        "PM 10 (µg/m³)"
-    ]
-    y_min, y_max = 0, 150
+def plot_room_data_availability(state, mappe: Path = INNEKLIMA_DIR):
 
-    terskler_pm = {}
-    for var in pm_vars:
-        warn_val     = THRESHOLDS_WARN.get(var)
-        critical_val = THRESHOLDS_CRITICAL.get(var)
-        if warn_val is None or critical_val is None:
-            terskler_pm[var] = []
-        else:
-            terskler_pm[var] = [
-                (critical_val, "red",   "Kritisk nivaa"),
-                (warn_val,     "green", "Optimal nivaa")
-            ]
-
-    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(14, 10), sharex=True, sharey=True)
-    axes_flat = axes.flatten()
-    romfarger = plt.cm.get_cmap("tab20")
-
-    for ax, var in zip(axes_flat, pm_vars):
-        df_list = pm_data.get(var, [])
-        if not df_list:
-            ax.text(0.5, 0.5, f"Ingen data for\n{var}", ha="center", va="center", fontsize=12)
-            ax.set_title(var)
-            ax.set_ylim(y_min, y_max)
-            continue
-
-        for idx, df2 in enumerate(df_list, start=1):
-            if df2.empty:
-                continue
-
-            kolonne = "Value" if "Value" in df2.columns else var
-            if kolonne not in df2.columns:
-                continue
-
-            df_sort = df2.sort_index().copy()
-            if not isinstance(df_sort.index, pd.DatetimeIndex):
-                df_sort = set_datetime_index(df_sort)
-
-            df_sort["tdiff"] = df_sort.index.to_series().diff()
-            gap_threshold = pd.Timedelta(hours=1)
-            df_sort.loc[df_sort["tdiff"] > gap_threshold, kolonne] = pd.NA
-            df_sort.drop(columns=["tdiff"], inplace=True)
-
-            start = df_sort.index.min()
-            slutt = df_sort.index.max()
-            full_idx = pd.date_range(start=start, end=slutt, freq="1h")
-            series = df_sort[kolonne].reindex(full_idx)
-
-            ax.plot(
-                series.index,
-                series.values,
-                color=romfarger((idx - 1) % 20),
-                linewidth=0.8
-            )
-
-        ters = terskler_pm.get(var, [])
-        ters_sorted = sorted(ters, key=lambda x: x[0], reverse=True)
-        brukt_label = set()
-        for verdi, farge, etikett in ters_sorted:
-            if etikett not in brukt_label:
-                ax.axhline(y=verdi, color=farge, linestyle="--", linewidth=1.2, label=etikett)
-                brukt_label.add(etikett)
-            else:
-                ax.axhline(y=verdi, color=farge, linestyle="--", linewidth=1.2)
-
-        ax.set_title(var, fontsize=12, pad=6)
-        ax.set_ylim(bottom=y_min, top=y_max)
-        ax.set_ylabel("µg/m³")
-
-        ax.xaxis.set_major_locator(YearLocator())
-        ax.xaxis.set_major_formatter(DateFormatter("%Y"))
-        ax.xaxis.set_minor_locator(MonthLocator())
-        ax.xaxis.set_minor_formatter(DateFormatter("%b"))
-        ax.tick_params(axis="x", which="major", labelsize=10, rotation=0, pad=8)
-        ax.tick_params(axis="x", which="minor", labelsize=8, rotation=0, pad=4)
-        for lbl in ax.get_xticklabels(minor=True):
-            txt = lbl.get_text()
-            lbl.set_text(txt[0] if txt else "")
-
-        ax.grid(True, axis="x", which="minor", linestyle=":", linewidth=0.3)
-
-        for child in ax.get_children():
-            if isinstance(child, Legend):
-                labels = [text.get_text() for text in child.get_texts()]
-                if any("Rom" in lbl for lbl in labels):
-                    child.remove()
-
-    handles_all, labels_all = [], []
-    for var in pm_vars:
-        for verdi, farge, etikett in terskler_pm.get(var, []):
-            if etikett not in labels_all:
-                h = plt.Line2D([], [], color=farge, linestyle="--", linewidth=1.2)
-                handles_all.append(h)
-                labels_all.append(etikett)
-
-    fig.legend(
-        handles_all,
-        labels_all,
-        title="Terskler",
-        loc="upper right",
-        bbox_to_anchor=(0.95, 0.95),
-        frameon=True
-    )
-
-    fig.supxlabel("Dato (år og månedsbokstav)", fontsize=12, y=0.02)
-    fig.supylabel("PM (µg/m³)", x=0.02, fontsize=12)
-    plt.tight_layout(rect=[0, 0, 0.93, 1])
-    plt.show()
-
-# ────────────── Dekningsgrad per rom (tekst-tabell) ──────────────
-def dekningsgrad_per_rom(df_list: List[pd.DataFrame], romnavn_list: List[str]) -> pd.DataFrame:
-    """
-    Beregner dekningsgrad for hver romserie i df_list.
-    Returnerer en DataFrame med kolonnene:
-      ['Room','Start date','End date','Days','Hours with data','Coverage (%)']
-    """
-    resultater = []
-
-    for i, df in enumerate(df_list):
-        romnavn = romnavn_list[i]
-        if df.empty or df.index.inferred_type != "datetime64":
-            resultater.append((romnavn, "No data", "-", "-", "-", "-"))
-            continue
-
-        start = df.index.min().floor("h")
-        slutt = df.index.max().ceil("h")
-        totalt_timer = int((slutt - start).total_seconds() / 3600)
-
-        df["hour"] = df.index.floor("h")
-        antall_timer_med_data = df["hour"].nunique()
-
-        dekning = min(100, int(antall_timer_med_data / totalt_timer) * 100) if totalt_timer else 0
-
-        resultater.append((
-            romnavn,
-            start.strftime("%Y-%m-%d"),
-            slutt.strftime("%Y-%m-%d"),
-            (slutt - start).days + 1,
-            f"{antall_timer_med_data}/{totalt_timer}",
-            f"{dekning:.1f}"
-        ))
-
-    return pd.DataFrame(
-        resultater,
-        columns=["Room", "Start date", "End date", "Days", "Hours with data", "Coverage (%)"]
-    )
-
-
-# ────────────── Datadeknings for alle rom ──────────────
-def vis_datadekning_per_rom(
-    byggliste: Optional[list[str]] = None,
-    mappe: Path = INNEKLIMA_DIR
-):
-    if byggliste is None:
-        byggliste = list(TILGJENGELIGE_BYGG.keys())
-
-    """
-    Tegner en oversikt over hvilke dager hvert rom har data paa tvers av bygg.
-    Henter CSV for hvert bygg/rom via fetch_csv og set_datetime_index.
-    """
+    byggliste = state["buildings"]
     oversikt = []
 
     for bygg in byggliste:
@@ -1070,24 +667,39 @@ def vis_datadekning_per_rom(
         romdata = [set_datetime_index(df) for df in romdata]
 
         for navn, df in zip(romnavn, romdata):
-            if df.empty or df.index.inferred_type != "datetime64":
+            filtrert_liste = filter_data(
+                [df],
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"]
+            )
+
+            if not filtrert_liste:
                 continue
-            # (Her kan du fjerne filtrering paa rom > 5 hvis du vil vise alle rom.)
-            df["Dato"] = df.index.date
-            unike_dager = sorted(df["Dato"].unique())
+
+            df_filtrert = filtrert_liste[0]
+
+            if df_filtrert.empty or df_filtrert.index.inferred_type != "datetime64":
+                continue
+
+            df_filtrert["Dato"] = df_filtrert.index.date
+            unike_dager = sorted(df_filtrert["Dato"].unique())
+
             for dag in unike_dager:
                 start = pd.to_datetime(dag)
                 slutt = start + pd.Timedelta(days=1)
                 oversikt.append({
                     "Bygg": f"B{bygg}",
-                    "Rom":  f"R{navn}",
+                    "Rom": f"R{navn}",
                     "Start": start,
                     "Slutt": slutt
                 })
 
     df = pd.DataFrame(oversikt)
     if df.empty:
-        print("❌ Ingen data aa vise.")
+        print("❌ Ingen data å vise for valgt datasett.")
         return
 
     df["Etikett"] = df["Bygg"] + "-" + df["Rom"]
@@ -1104,14 +716,15 @@ def vis_datadekning_per_rom(
     fig, ax = plt.subplots(
         figsize=(12, max(5, len(df["Etikett"].unique()) * 0.5))
     )
-    etiketter_sortert = sorted(df["Etikett"].unique(), reverse=True)
-    etikett_idx = { etikett: idx for idx, etikett in enumerate(etiketter_sortert) }
 
-    # Tegn åarsskifte-linjer i bakgrunnen (lav zorder):
+    etiketter_sortert = sorted(df["Etikett"].unique(), reverse=True)
+    etikett_idx = {etikett: idx for idx, etikett in enumerate(etiketter_sortert)}
+
     min_dato = df["Start"].min()
     max_dato = df["Slutt"].max()
     year_start = min_dato.year
     year_slutt = max_dato.year
+
     for år in range(year_start + 1, year_slutt + 1):
         overgang = pd.to_datetime(f"{år}-01-01")
         ax.axvline(
@@ -1121,7 +734,6 @@ def vis_datadekning_per_rom(
             zorder=0
         )
 
-    # Tegn datalinjer for hver dag/rom
     for _, row in df.iterrows():
         y = etikett_idx[row["Etikett"]]
         ax.plot(
@@ -1140,48 +752,101 @@ def vis_datadekning_per_rom(
     ax.xaxis.set_minor_locator(MonthLocator())
     ax.xaxis.set_minor_formatter(DateFormatter("%b"))
     ax.tick_params(axis="x", which="minor", labelsize=8, rotation=0, pad=10)
+
     for lbl in ax.get_xticklabels(minor=True):
         txt = lbl.get_text()
         lbl.set_text(txt[0] if txt else "")
+
     ax.grid(True, axis="x", which="minor", linestyle=":", linewidth=0.4)
 
     for bygg, farge in bygg_farger.items():
         ax.plot([], [], label=bygg, color=farge, linewidth=6)
-    ax.legend(title="Bygg", loc="upper left", bbox_to_anchor=(1, 1))
 
-    ax.set_title("Tilgjengelighet av sensordata – bygg og romnummer")
+    ax.legend(title="Bygg", loc="upper left", bbox_to_anchor=(1, 1))
+    period_label = format_period_label(
+        state["mode"],
+        state["year"],
+        state["month"],
+        state["week"],
+        state["day"],
+    )
+
+    subject = (
+        f"Bygg {state['buildings'][0]}"
+        if len(state["buildings"]) == 1
+        else "Valgte bygg"
+    )
+
+    ax.set_title(build_plot_title(subject, "datadekning per rom", period_label))
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_building_boxplot(variable: str, building_data, building_labels, scope_label):
+    if not building_data:
+        print(f"Ingen data funnet for {variable} i valgt datasett.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.boxplot(building_data, tick_labels=building_labels, vert=False)
+
+    draw_thresholds(ax, variable)
+
+    ax.set_xlabel(variable)
+    ax.set_ylabel("Bygg")
+    ax.set_title(f"{variable} – {scope_label}")
+    ax.grid(axis="x", alpha=0.3)
+    ax.legend()
     plt.tight_layout()
     plt.show()
 
 
-def vis_dekningsgrad_alle_bygg() -> None:
-    """
-    Loop gjennom alle tilgjengelige bygg, beregn dekningsgrad per rom, og skriv resultatet ut.
-    """
+def plot_pm_boxplots(pm_plot_data, scope_label):
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
 
-    # Hent TILGJENGELIGE_BYGG inn her (unngår top‐level sirkulær import)
-    from building_analysis import TILGJENGELIGE_BYGG
+    for ax, (variable, building_data, building_labels) in zip(axes, pm_plot_data):
+        if not building_data:
+            plt.suptitle(f"Luftpartikkelnivå – {scope_label}")
 
-    for byggkode in TILGJENGELIGE_BYGG:
-        dfs, romnavn, _ = fetch_csv(building_number=byggkode)
-        if not dfs:
+            ax.axis("off")
             continue
 
-        # Sorg for at alle data har datetime‐index for dekningsgrad‐beregnes
-        for df in dfs:
-            set_datetime_index(df)
+        ax.boxplot(building_data, tick_labels=building_labels, vert=False)
+        draw_thresholds(ax, variable)
+        ax.set_title(variable)
+        ax.set_xlabel("Konsentrasjon")
+        ax.set_ylabel("Bygg")
+        ax.grid(axis="x", alpha=0.3)
+        ax.legend()
 
-        df_deg = dekningsgrad_per_rom(dfs, romnavn)
+    plt.suptitle(f"Partikler\n{scope_label}")
+    plt.tight_layout()
+    plt.show()
 
-        # Oversett kolonnenavn til norsk
-        df_deg.rename(columns={
-            'Room':           'Rom',
-            'Start date':     'Startdato',
-            'End date':       'Sluttdato',
-            'Hours with data': 'Timer med data',
-            'Coverage (%)':   'Dekning (%)'
-        }, inplace=True)
 
-        print(f"\n-- Dekningsgrad for Bygg {byggkode} – {TILGJENGELIGE_BYGG[byggkode]} --")
-        print(df_deg.to_string(index=False))
+def draw_thresholds(ax, variabel: str):
+    # Luftkvalitetsvariabler
+    if variabel in THRESHOLDS_CRITICAL:
+        terskel = THRESHOLDS_CRITICAL[variabel]
+        ax.axvline(terskel, linestyle="--", linewidth=2, label=f"Kritisk grense: {terskel}")
 
+    # Luftfuktighet
+    elif variabel == "Luftfuktighet (%)":
+        crit_min = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]["critical_min"]
+        crit_max = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]["critical_max"]
+
+        ax.axvline(crit_min, linestyle="--", linewidth=2, label=f"Kritisk min: {crit_min}")
+        ax.axvline(crit_max, linestyle="--", linewidth=2, label=f"Kritisk maks: {crit_max}")
+
+    # Temperatur
+    elif variabel == "Temperatur (°C)":
+        dag_min = THRESHOLDS_TEMPERATURE["day"]["min"]
+        dag_max = THRESHOLDS_TEMPERATURE["day"]["max"]
+        natt_min = THRESHOLDS_TEMPERATURE["night"]["min"]
+        natt_max = THRESHOLDS_TEMPERATURE["night"]["max"]
+
+        ax.axvline(dag_min, linestyle="--", linewidth=2, label=f"Dag/natt: {dag_min}")
+        ax.axvline(natt_min, linestyle=":", linewidth=2, label=f"Minimum: {natt_min}")
+        ax.axvline(dag_max, linestyle="--", linewidth=2, label=f"Maksimum: {dag_max}")
+        ax.axvline(natt_max, linestyle=":", linewidth=2, )

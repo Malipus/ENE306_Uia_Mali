@@ -1,36 +1,45 @@
 import sys
-import building_analysis
 import analysis
-import plotting
+
+from config import TILGJENGELIGE_BYGG
+
+app_state = {
+    "buildings": list(TILGJENGELIGE_BYGG.keys()),
+    "mode": "all",
+    "year": None,
+    "month": None,
+    "week": None,
+    "day": None,
+}
 
 
-def vis_hovedmeny():
-    print("\n📋 HOVEDMENY")
-    print("1. Fordeling (histogram) for én variabel (alle bygg/rom)")
-    print("2. Bygg-analyse")
-    print("3. Boxplot")
-    print("4. Tidsserie over én variabel (alle bygg/rom)")
-    print("5. Datadekning per rom")
+def print_main_menu():
+    print("\nHOVEDMENY")
+    print("1. Velg eller endre datasett")
+    print("2. Vis aktivt datasett")
+    print("3. Fordeling (histogram)")
+    print("4. Tidsserie")
+    print("5. Boxplot")
+    print("6. Datadekning per rom")
     print("b. Avslutt")
 
 
-
 def main():
-
     while True:
-        vis_hovedmeny()
+        print_main_menu()
         valg = input("Velg et alternativ: ").strip().lower()
-
         if valg == "1":
-            analysis.run_distribution()
+            analysis.configure_scope(app_state)
         elif valg == "2":
-            analysis.run_time_series()
+            analysis.print_active_scope(app_state)
         elif valg == "3":
-            building_analysis.run_boxplot_alle_bygg()
+            analysis.run_distribution(app_state)
         elif valg == "4":
-            building_analysis.run_building_analysis()
+            analysis.run_time_series(app_state)
         elif valg == "5":
-            plotting.vis_datadekning_per_rom()
+            analysis.run_boxplot_menu(app_state)
+        elif valg == "6":
+            analysis.run_data_availability(app_state)
         elif valg == "b":
             print("Avslutter...")
             sys.exit(0)

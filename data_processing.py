@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE, INNEKLIMA_DIR)
 
-def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "07", filenames: Optional[List[str]] = None) -> Tuple[List[pd.DataFrame], List[str], int]:
+def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "07", filenames: Optional[List[str]] = None)\
+        -> Tuple[List[pd.DataFrame], List[str], int]:
     """
     Leser alle inneklima‐CSV‐filer for ett bygg, og returnerer:
       - dfs: List[pd.DataFrame], én DataFrame per rom
@@ -239,7 +240,7 @@ def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[
                 (df_copy.index.month == day.month) &
                 (df_copy.index.day == day.day)
             ]
-        elif mode == "fall": # 10. August til 10. desember
+        elif mode == "fall": # August til desember
             mask = (
                 ((df_copy.index.year == year) & (df_copy.index.month >= 8)) |
                 ((df_copy.index.year == year) & (df_copy.index.month <= 12))
@@ -260,40 +261,3 @@ def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[
 
     return filtered_list
 
-
-class DataContainer:
-    """
-    En liten wrapper som pakker sammen:
-      - room_data    : List[pd.DataFrame] for ett bygg
-      - weather_data : pd.DataFrame for Seklima/Kunak
-      - building_number: String, f.eks. "Bygg 07"
-    Metode filter(...) returnerer (filtered_rooms, filtered_weather) etter gitt tidsintervall.
-    """
-    def __init__(
-        self,
-        room_data: List[pd.DataFrame],
-        weather_data: pd.DataFrame,
-        building_number: Optional[str] = None
-    ):
-        self.room_data = room_data
-        self.weather_data = weather_data
-        self.building_number = building_number
-
-    def filter(
-        self,
-        mode: str = "year",
-        year: Optional[int] = None,
-        month: Optional[int] = None,
-        week: Optional[int] = None,
-        day: Optional[pd.Timestamp] = None
-    ) -> Tuple[List[pd.DataFrame], pd.DataFrame]:
-        """
-        Returnerer en tuple:
-          - filtered_rooms   : List[pd.DataFrame] av room_data etter gitt periode
-          - filtered_weather : pd.DataFrame av weather_data etter gitt periode
-
-        Bruker funksjonene `filter_data(...)` og `filter_weather(...)`.
-        """
-        filtered_rooms = filter_data(self.room_data, mode, year, month, week, day)
-        filtered_weather = filter_weather(self.weather_data, mode, year, month, week, day)
-        return filtered_rooms, filtered_weather
