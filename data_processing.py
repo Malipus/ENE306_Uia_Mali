@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE, INNEKLIMA_DIR)
 
-def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "07", filenames: Optional[List[str]] = None)\
+def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "7", filenames: Optional[List[str]] = None)\
         -> Tuple[List[pd.DataFrame], List[str], int]:
     """
     Leser alle inneklima‐CSV‐filer for ett bygg, og returnerer:
@@ -15,7 +15,7 @@ def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "07", file
 
     Args:
       directory      : Path til mappa med inneklima‐filer
-      building_number: To-sifret byggkode, f.eks. "07"
+      building_number: Byggkode, f.eks. "7"
       filenames      : Hvis man vil spesifisere en separat liste over filnavn
 
     Filnavn‐mønster: data_RES{bygg}01... .csv

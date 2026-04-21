@@ -17,16 +17,16 @@ KUNAK_FILE   = BASE_DATA_DIR / "Kunak.csv"
 # - Vi bruker mal: "data_RES{bygg}01" der {bygg} er to sifre
 
 
-INNEKLIMA_PREFIX_TEMPLATE = "data_RES{bygg}01"
+INNEKLIMA_PREFIX_TEMPLATE = "data_RES0{bygg}01"
 
 
 TILGJENGELIGE_BYGG = {
-    '01': 'Tønnevoldsgate 26, Sentrum',
-    '02': 'Jon Lilletuns Vei 2A, Campus',
-    '04': 'Jon Lilletuns Vei 15, Campus',
-    '05': 'Jon Lilletuns Vei 17, Campus',
-    '07': 'Jon Lilletuns Vei 21, Campus',
-    '08': 'Jon Lilletuns Vei 23, Campus'
+    '1': 'Tønnevoldsgate 26, Sentrum',
+    '2': 'Jon Lilletuns Vei 2A, Campus',
+    '4': 'Jon Lilletuns Vei 15, Campus',
+    '5': 'Jon Lilletuns Vei 17, Campus',
+    '7': 'Jon Lilletuns Vei 21, Campus',
+    '8': 'Jon Lilletuns Vei 23, Campus'
 }
 
 

@@ -691,8 +691,8 @@ def plot_room_data_availability(state, mappe: Path = INNEKLIMA_DIR):
                 start = pd.to_datetime(dag)
                 slutt = start + pd.Timedelta(days=1)
                 oversikt.append({
-                    "Bygg": f"B{bygg}",
-                    "Rom": f"R{navn}",
+                    "Bygg": f"{bygg}",
+                    "Rom": f"{navn}",
                     "Start": start,
                     "Slutt": slutt
                 })
@@ -702,7 +702,7 @@ def plot_room_data_availability(state, mappe: Path = INNEKLIMA_DIR):
         print("❌ Ingen data å vise for valgt datasett.")
         return
 
-    df["Etikett"] = df["Bygg"] + "-" + df["Rom"]
+    df["Etikett"] = "B" + df["Bygg"] + " Rom" + df["Rom"]
     df.sort_values(by=["Etikett", "Start"], inplace=True)
     df.reset_index(drop=True, inplace=True)
 
