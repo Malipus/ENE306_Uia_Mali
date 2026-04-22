@@ -7,7 +7,7 @@ import matplotlib.dates as mdates
 from matplotlib import cm
 from matplotlib.legend import Legend
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
-from matplotlib.ticker import FixedLocator, FixedFormatter
+from matplotlib.ticker import FixedLocator, FixedFormatter, MultipleLocator
 
 from typing import List, Optional
 from pathlib import Path
@@ -241,7 +241,9 @@ def plot_temperature(df_list: List[pd.DataFrame],
     period_label = format_period_label(mode, year, month, week, day)
 
     if title_subject is None:
-        title_subject = f"Bygg {byggkode}" if byggkode else "Valgte rom"
+        title_subject = f"Bygg {byggkode}" if byggkode else (""
+                                                             ""
+                                                            )
 
     ax.set_title(build_plot_title(title_subject, "temperatur", period_label))
 
@@ -788,14 +790,20 @@ def plot_building_boxplot(variable: str, building_data, building_labels, scope_l
         return
 
     fig, ax = plt.subplots(figsize=(12, 6))
+    building_data = building_data[::-1]
+    building_labels = building_labels[::-1]
     ax.boxplot(building_data, tick_labels=building_labels, vert=False)
 
     draw_thresholds(ax, variable)
 
     ax.set_xlabel(variable)
-    ax.set_ylabel("Bygg")
+    ax.xaxis.set_minor_locator(MultipleLocator(1))
+    ax.tick_params(axis="x", which="minor", length=4)
+
     ax.set_title(f"{variable} – {scope_label}")
-    ax.grid(axis="x", alpha=0.3)
+    ax.grid(axis="x", which="major", linestyle="--", linewidth=0.8, alpha=0.6)
+    ax.grid(axis="x", which="minor", linestyle=":", linewidth=0.5, alpha=0.4)
+
     ax.legend()
     plt.tight_layout()
     plt.show()
@@ -812,12 +820,19 @@ def plot_pm_boxplots(pm_plot_data, scope_label):
             ax.axis("off")
             continue
 
+        building_data = building_data[::-1]
+        building_labels = building_labels[::-1]
         ax.boxplot(building_data, tick_labels=building_labels, vert=False)
+
         draw_thresholds(ax, variable)
         ax.set_title(variable)
         ax.set_xlabel("Konsentrasjon")
-        ax.set_ylabel("Bygg")
-        ax.grid(axis="x", alpha=0.3)
+        ax.xaxis.set_minor_locator(MultipleLocator(1))
+        ax.tick_params(axis="x", which="minor", length=4)
+
+        ax.grid(axis="x", which="major", linestyle="--", linewidth=0.8, alpha=0.6)
+        ax.grid(axis="x", which="minor", linestyle=":", linewidth=0.5, alpha=0.4)
+
         ax.legend()
 
     plt.suptitle(f"Partikler\n{scope_label}")
@@ -844,9 +859,7 @@ def draw_thresholds(ax, variabel: str):
         dag_min = THRESHOLDS_TEMPERATURE["day"]["min"]
         dag_max = THRESHOLDS_TEMPERATURE["day"]["max"]
         natt_min = THRESHOLDS_TEMPERATURE["night"]["min"]
-        natt_max = THRESHOLDS_TEMPERATURE["night"]["max"]
 
-        ax.axvline(dag_min, linestyle="--", linewidth=2, label=f"Dag/natt: {dag_min}")
-        ax.axvline(natt_min, linestyle=":", linewidth=2, label=f"Minimum: {natt_min}")
+        ax.axvline(dag_min, linestyle=":", linewidth=2, label=f"Dag/natt: {dag_min}")
+        ax.axvline(natt_min, linestyle="--", linewidth=2, label=f"Minimum: {natt_min}")
         ax.axvline(dag_max, linestyle="--", linewidth=2, label=f"Maksimum: {dag_max}")
-        ax.axvline(natt_max, linestyle=":", linewidth=2, )

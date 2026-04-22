@@ -40,6 +40,7 @@ def format_scope_label(state):
     return "Ukjent periode"
 
 
+
 def collect_boxplot_data_by_building(variabel: str, state):
     bygg_data = []
     bygg_labels = []
@@ -76,9 +77,65 @@ def collect_boxplot_data_by_building(variabel: str, state):
 
         if alle_verdier:
             bygg_data.append(alle_verdier)
-            bygg_labels.append(f"{byggkode} - {byggnavn}")
+            bygg_labels.append(f"Bygg {int(byggkode)}")
+
 
     return bygg_data, bygg_labels
+
+
+def build_boxplot_summary_df(variable: str, building_data, building_labels) -> pd.DataFrame:
+    rows = []
+
+    for label, values in zip(building_labels, building_data):
+        if not values:
+            continue
+
+        series = pd.Series(values, dtype="float64").dropna()
+        if series.empty:
+            continue
+
+        rows.append({
+            "Bygg": label,
+            "Variabel": variable,
+            "Antall": int(series.count()),
+            "Minimum": round(series.min(), 2),
+            "Q1": round(series.quantile(0.25), 2),
+            "Median": round(series.median(), 2),
+            "Gjennomsnitt": round(series.mean(), 2),
+            "Q3": round(series.quantile(0.75), 2),
+            "Maksimum": round(series.max(), 2),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def print_boxplot_summary(variable: str, building_data, building_labels, scope_label: str):
+    summary_df = build_boxplot_summary_df(variable, building_data, building_labels)
+
+    print(f"\nBoxplot-verdier for {variable}")
+    print(f"Periode: {scope_label}")
+
+    if summary_df.empty:
+        print("Ingen data tilgjengelig.\n")
+        return
+
+    print(summary_df.to_string(index=False))
+    print()
+
+
+def print_pm_boxplot_summary(pm_plot_data, scope_label: str):
+    print("\nBoxplot-verdier for partikler")
+    print(f"Periode: {scope_label}\n")
+
+    for variable, building_data, building_labels in pm_plot_data:
+        summary_df = build_boxplot_summary_df(variable, building_data, building_labels)
+
+        print(variable)
+        if summary_df.empty:
+            print("Ingen data tilgjengelig.\n")
+        else:
+            print(summary_df.to_string(index=False))
+            print()
 
 
 def run_boxplot_menu(state):
@@ -113,12 +170,18 @@ def run_boxplot_menu(state):
                 building_data, building_labels = collect_boxplot_data_by_building(variable, state)
                 pm_plot_data.append((variable, building_data, building_labels))
 
+            print_pm_boxplot_summary(pm_plot_data, scope_label)
             plot_pm_boxplots(pm_plot_data, scope_label)
 
+
         elif valg in variabler:
+
             variable = variabler[valg]
             building_data, building_labels = collect_boxplot_data_by_building(variable, state)
+
+            print_boxplot_summary(variable, building_data, building_labels, scope_label)
             plot_building_boxplot(variable, building_data, building_labels, scope_label)
+
 
         else:
             print("❌ Ugyldig valg.")
@@ -203,7 +266,7 @@ def select_building(state):
     while True:
         print("\nBYGGVALG")
         print("1. Alle bygg")
-        print("2. Ett bygg")
+        print("2. Velg ut bygg")
         print("b. Tilbake")
 
         valg = input("Velg bygg: ").strip().lower()
@@ -217,16 +280,19 @@ def select_building(state):
             return
 
         if valg == "2":
+            state["buildings"]= []
             print("\nTilgjengelige bygg:")
             for kode, navn in TILGJENGELIGE_BYGG.items():
                 print(f"{kode} - {navn}")
 
-            byggkode = input("Skriv byggkode: ").strip().zfill(2)
+            byggkode = input("Oppgi ønskede byggnummer: f.eks 125 ").strip().zfill(2)
 
-            if byggkode in TILGJENGELIGE_BYGG:
-                state["buildings"] = [byggkode]
-                print(f"✅ Bygg {byggkode} er valgt.")
-                return
+            for i in byggkode:
+                if i in TILGJENGELIGE_BYGG:
+                    state["buildings"] += [i]
+                    print(f"✅ Bygg {i} er valgt.")
+            return
+
 
             print("❌ Ugyldig byggkode.")
             continue
