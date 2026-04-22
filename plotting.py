@@ -659,6 +659,77 @@ def plot_all_rooms_variable(
     plt.show()
 
 
+def plot_threshold_scatter(
+    scatter_df: pd.DataFrame,
+    variable: str,
+    threshold: float,
+    direction: str,
+    scope_label: str,
+    title: str,
+    start_vis: Optional[pd.Timestamp] = None,
+    slutt_vis: Optional[pd.Timestamp] = None,
+) -> None:
+    if scatter_df.empty:
+        retningstekst = "over" if direction == "above" else "under"
+        print(f"❌ Ingen målinger {retningstekst} {threshold:g} for {variable} i valgt datasett.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plot_df = scatter_df.copy()
+
+    if plot_df["Bygg"].nunique() == 1:
+        group_col = "Rom"
+        legend_title = "Rom"
+        plot_df[group_col] = plot_df[group_col].fillna("Ukjent rom")
+    else:
+        group_col = "Bygg"
+        legend_title = "Bygg"
+
+    grupper = sorted(plot_df[group_col].dropna().unique())
+    cmap = cm.get_cmap("tab10", max(1, len(grupper)))
+
+    for idx, gruppe in enumerate(grupper):
+        subset = plot_df[plot_df[group_col] == gruppe]
+        ax.scatter(
+            subset["Tid"],
+            subset["Verdi"],
+            label=gruppe,
+            color=cmap(idx),
+            s=18,
+            alpha=0.75
+        )
+
+    threshold_label = "Øvre grense" if direction == "above" else "Nedre grense"
+    ax.axhline(
+        y=threshold,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=f"{threshold_label}: {threshold:g}"
+    )
+
+    if start_vis is not None and slutt_vis is not None:
+        ax.set_xlim(start_vis, slutt_vis)
+
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+
+    ax.set_ylabel(variable)
+    ax.set_xlabel("")
+    ax.set_title(f"{title}\n{scope_label}")
+    ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(1, 1),
+        title=legend_title,
+        frameon=True
+    )
+
+    fig.subplots_adjust(left=0.07, right=0.80, top=0.90, bottom=0.12)
+    plt.show()
+
+
 def plot_room_data_availability(state, mappe: Path = INNEKLIMA_DIR):
 
     byggliste = state["buildings"]
@@ -667,6 +738,11 @@ def plot_room_data_availability(state, mappe: Path = INNEKLIMA_DIR):
     for bygg in byggliste:
         romdata, romnavn, antall_rom = fetch_csv(directory=mappe, building_number=bygg)
         romdata = [set_datetime_index(df) for df in romdata]
+
+        for navn, df in zip(romnavn, romdata):
+            valgte_rom = state.get("rooms_by_building", {}).get(str(bygg))
+            if valgte_rom is not None and str(navn) not in valgte_rom:
+                continue
 
         for navn, df in zip(romnavn, romdata):
             filtrert_liste = filter_data(
@@ -797,12 +873,14 @@ def plot_building_boxplot(variable: str, building_data, building_labels, scope_l
     draw_thresholds(ax, variable)
 
     ax.set_xlabel(variable)
-    ax.xaxis.set_minor_locator(MultipleLocator(1))
-    ax.tick_params(axis="x", which="minor", length=4)
+
+    if variable in ("Temperatur (°C)", "Luftfuktighet (%)"):
+        ax.xaxis.set_minor_locator(MultipleLocator(1))
+        ax.tick_params(axis="x", which="minor", length=4)
+        ax.grid(axis="x", which="major", linestyle="--", linewidth=0.8, alpha=0.6)
+        ax.grid(axis="x", which="minor", linestyle=":", linewidth=0.5, alpha=0.4)
 
     ax.set_title(f"{variable} – {scope_label}")
-    ax.grid(axis="x", which="major", linestyle="--", linewidth=0.8, alpha=0.6)
-    ax.grid(axis="x", which="minor", linestyle=":", linewidth=0.5, alpha=0.4)
 
     ax.legend()
     plt.tight_layout()
@@ -827,11 +905,6 @@ def plot_pm_boxplots(pm_plot_data, scope_label):
         draw_thresholds(ax, variable)
         ax.set_title(variable)
         ax.set_xlabel("Konsentrasjon")
-        ax.xaxis.set_minor_locator(MultipleLocator(1))
-        ax.tick_params(axis="x", which="minor", length=4)
-
-        ax.grid(axis="x", which="major", linestyle="--", linewidth=0.8, alpha=0.6)
-        ax.grid(axis="x", which="minor", linestyle=":", linewidth=0.5, alpha=0.4)
 
         ax.legend()
 

@@ -9,7 +9,8 @@ from plotting import (plot_all_rooms_variable,
                     plot_humidity,
                     plot_building_boxplot,
                     plot_pm_boxplots,
-                    plot_room_data_availability)
+                    plot_room_data_availability,
+                    plot_threshold_scatter)
 
 
 
@@ -47,7 +48,11 @@ def collect_boxplot_data_by_building(variabel: str, state):
 
     for byggkode in state["buildings"]:
         byggnavn = TILGJENGELIGE_BYGG.get(byggkode, byggkode)
-        dfs, _, _ = fetch_csv(building_number=byggkode)
+        dfs, romnavn, _ = fetch_csv(building_number=byggkode)
+
+        for df, rom in zip(dfs, romnavn):
+            if not room_is_selected(state, byggkode, rom):
+                continue
 
         alle_verdier = []
 
@@ -81,6 +86,120 @@ def collect_boxplot_data_by_building(variabel: str, state):
 
 
     return bygg_data, bygg_labels
+
+
+def collect_threshold_scatter_data(variable: str, state, threshold: float, direction: str) -> pd.DataFrame:
+    rows = []
+
+    for byggkode in state["buildings"]:
+        dfs, romnavn, _ = fetch_csv(building_number=byggkode)
+
+        for df, romnavn_i in zip(dfs, romnavn):
+            if not room_is_selected(state, byggkode, romnavn_i):
+                continue
+
+            df = set_datetime_index(df)
+
+            filtrerte_liste = filter_data(
+                [df],
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"]
+            )
+
+            if not filtrerte_liste:
+                continue
+
+            df_filtrert = filtrerte_liste[0]
+
+            if variable not in df_filtrert.columns:
+                continue
+
+            serie = pd.to_numeric(df_filtrert[variable], errors="coerce").dropna()
+            if serie.empty:
+                continue
+
+            if direction == "above":
+                brudd = serie[serie > threshold]
+            elif direction == "below":
+                brudd = serie[serie < threshold]
+            else:
+                raise ValueError(f"Ukjent retning: {direction}")
+
+            for tidspunkt, verdi in brudd.items():
+                rows.append({
+                    "Tid": tidspunkt,
+                    "Verdi": float(verdi),
+                    "Byggkode": byggkode,
+                    "Bygg": f"Bygg {int(byggkode)}",
+                    "Rom": romnavn_i
+                })
+
+    if not rows:
+        return pd.DataFrame(columns=["Tid", "Verdi", "Byggkode", "Bygg", "Rom"])
+
+    df = pd.DataFrame(rows)
+    df.sort_values(by=["Tid", "Bygg", "Rom"], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+
+def build_threshold_scatter_specs(variable: str):
+    if variable == "Temperatur (°C)":
+        lower = THRESHOLDS_TEMPERATURE["night"]["min"]
+        upper = THRESHOLDS_TEMPERATURE["day"]["max"]
+        return [
+            (lower, "below", f"Temperatur under {lower:g} °C"),
+            (upper, "above", f"Temperatur over {upper:g} °C"),
+        ]
+
+    if variable == "Luftfuktighet (%)":
+        grenser = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]
+        lower = grenser["critical_min"]
+        upper = grenser["critical_max"]
+        return [
+            (lower, "below", f"Luftfuktighet under {lower:g} %"),
+            (upper, "above", f"Luftfuktighet over {upper:g} %"),
+        ]
+
+    critical = THRESHOLDS_CRITICAL.get(variable)
+    if critical is None:
+        return []
+
+    return [(critical, "above", f"{variable} over kritisk grense ({critical:g})")]
+
+
+def get_scope_limits(state):
+    mode = state["mode"]
+    year = state["year"]
+    month = state["month"]
+    week = state["week"]
+    day = state["day"]
+
+    if mode == "day" and isinstance(day, pd.Timestamp):
+        start_vis = day.replace(hour=0, minute=0, second=0)
+        slutt_vis = start_vis + pd.Timedelta(days=1)
+    elif mode == "week" and isinstance(year, int) and isinstance(week, int):
+        start_vis = pd.Timestamp(datetime.fromisocalendar(year, week, 1))
+        slutt_vis = start_vis + pd.Timedelta(days=7)
+    elif mode == "month" and isinstance(year, int) and isinstance(month, int):
+        start_vis = pd.to_datetime(f"{year}-{month:02d}-01")
+        slutt_vis = start_vis + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1)
+    elif mode == "year" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-01-01")
+        slutt_vis = pd.to_datetime(f"{year}-12-31") + pd.Timedelta(days=1)
+    elif mode == "fall" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-08-10")
+        slutt_vis = pd.to_datetime(f"{year}-12-10") + pd.Timedelta(days=1)
+    elif mode == "spring" and isinstance(year, int):
+        start_vis = pd.to_datetime(f"{year}-01-06")
+        slutt_vis = pd.to_datetime(f"{year}-06-06") + pd.Timedelta(days=1)
+    else:
+        return None, None
+
+    return start_vis, slutt_vis
 
 
 def build_boxplot_summary_df(variable: str, building_data, building_labels) -> pd.DataFrame:
@@ -185,6 +304,44 @@ def run_boxplot_menu(state):
 
         else:
             print("❌ Ugyldig valg.")
+
+
+def run_threshold_scatter_menu(state):
+    while True:
+        print("\n📍 GRENSEBRUDD (SCATTER)")
+        for key, var in VARIABLE_CHOICES.items():
+            print(f"{key}. {var}")
+        print("b. Tilbake til hovedmeny")
+
+        valg = input("Valg: ").strip().lower()
+        if valg == "b":
+            return
+
+        if valg not in VARIABLE_CHOICES:
+            print("❌ Ugyldig valg. Prøv igjen.")
+            continue
+
+        variable = VARIABLE_CHOICES[valg]
+        scope_label = format_scope_label(state)
+        start_vis, slutt_vis = get_scope_limits(state)
+        specs = build_threshold_scatter_specs(variable)
+
+        if not specs:
+            print(f"❌ Ingen grenseverdier definert for '{variable}'.")
+            continue
+
+        for threshold, direction, title in specs:
+            scatter_df = collect_threshold_scatter_data(variable, state, threshold, direction)
+            plot_threshold_scatter(
+                scatter_df,
+                variable=variable,
+                threshold=threshold,
+                direction=direction,
+                scope_label=scope_label,
+                title=title,
+                start_vis=start_vis,
+                slutt_vis=slutt_vis,
+            )
 
 
 def print_active_scope(state):
@@ -399,8 +556,70 @@ def select_time_scope(state):
 def configure_scope(state):
     print("\nVELG DATASETT")
     select_building(state)
+    select_rooms(state)
     select_time_scope(state)
     print_active_scope(state)
+
+
+def room_is_selected(state, byggkode, rom):
+    valgte_rom = state.get("rooms_by_building", {}).get(str(byggkode))
+    if valgte_rom is None:
+        return True
+    return str(rom) in [str(r) for r in valgte_rom]
+
+
+def select_rooms(state):
+    state["rooms_by_building"] = {}
+
+    for byggkode in state["buildings"]:
+        while True:
+            print(f"\nROMVALG FOR BYGG {byggkode}")
+            print(f"Byggnavn: {TILGJENGELIGE_BYGG.get(byggkode, byggkode)}")
+
+            try:
+                _, romnavn, _ = fetch_csv(building_number=byggkode)
+            except Exception as e:
+                print(f"⚠️ Klarte ikke hente rom for bygg {byggkode}: {e}")
+                state["rooms_by_building"][byggkode] = None
+                break
+
+            tilgjengelige_rom = sorted(set(str(r) for r in romnavn), key=int)
+
+            if not tilgjengelige_rom:
+                print("⚠️ Ingen rom funnet. Bruker alle rom.")
+                state["rooms_by_building"][byggkode] = None
+                break
+
+            print("1. Alle rom")
+            print("2. Velg rom")
+            print("Tilgjengelige rom: " + ", ".join(tilgjengelige_rom))
+
+            valg = input("Velg rommodus: ").strip().lower()
+
+            if valg == "1":
+                state["rooms_by_building"][byggkode] = None
+                print(f"✅ Alle rom i bygg {byggkode} er valgt.")
+                break
+
+            if valg == "2":
+                inp = input("Oppgi romnummer separert med komma, f.eks. 1,3: ").strip()
+                valgte_rom = [r.strip() for r in inp.split(",") if r.strip()]
+                ugyldige = [r for r in valgte_rom if r not in tilgjengelige_rom]
+
+                if not valgte_rom:
+                    print("❌ Du må velge minst ett rom.")
+                    continue
+
+                if ugyldige:
+                    print(f"❌ Ugyldige rom: {', '.join(ugyldige)}")
+                    continue
+
+                state["rooms_by_building"][byggkode] = valgte_rom
+                print(f"✅ Valgte rom i bygg {byggkode}: {', '.join(valgte_rom)}")
+                break
+
+            print("❌ Ugyldig valg.")
+
 
 
 def _collect_all_room_data(variable: str, state, rename_to_value: bool = True):
@@ -417,6 +636,9 @@ def _collect_all_room_data(variable: str, state, rename_to_value: bool = True):
             continue
 
         for df, rom in zip(dfs_bygg, romnavn):
+            if not room_is_selected(state, bygg, rom):
+                continue
+
             df2 = set_datetime_index(df)
 
             filtrerte_liste = filter_data(
@@ -590,6 +812,9 @@ def _collect_all_values_for_variable(variable: str, state) -> pd.Series:
             continue
 
         for df, rom in zip(dfs_bygg, romnavn):
+            if not room_is_selected(state, bygg, rom):
+                continue
+
             df2 = set_datetime_index(df)
 
             filtrerte_liste = filter_data(

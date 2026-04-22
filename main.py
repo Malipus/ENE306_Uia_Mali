@@ -5,6 +5,7 @@ from config import TILGJENGELIGE_BYGG
 
 app_state = {
     "buildings": list(TILGJENGELIGE_BYGG.keys()),
+    "rooms_by_building": {},
     "mode": "all",
     "year": None,
     "month": None,
@@ -21,6 +22,7 @@ def print_main_menu():
     print("4. Tidsserie")
     print("5. Boxplot")
     print("6. Datadekning per rom")
+    print("7. Grensebrudd (scatter)")
     print("b. Avslutt")
 
 
@@ -40,6 +42,8 @@ def main():
             analysis.run_boxplot_menu(app_state)
         elif valg == "6":
             analysis.run_data_availability(app_state)
+        elif valg == "7":
+            analysis.run_threshold_scatter_menu(app_state)
         elif valg == "b":
             print("Avslutter...")
             sys.exit(0)

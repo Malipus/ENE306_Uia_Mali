@@ -240,19 +240,15 @@ def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[
                 (df_copy.index.month == day.month) &
                 (df_copy.index.day == day.day)
             ]
-        elif mode == "fall": # August til desember
-            mask = (
-                ((df_copy.index.year == year) & (df_copy.index.month >= 8)) |
-                ((df_copy.index.year == year) & (df_copy.index.month <= 12))
-            )
-            df_copy = df_copy[mask]
+        elif mode == "spring":
+            start = pd.Timestamp(year=year, month=1, day=6)
+            end = pd.Timestamp(year=year, month=6, day=6) + pd.Timedelta(days=1)
+            df_copy = df_copy[(df_copy.index >= start) & (df_copy.index < end)]
 
-        elif mode == "spring": # Januar til Juni
-            mask = (
-                ((df_copy.index.year == year) & (df_copy.index.month >= 1)) |
-                ((df_copy.index.year == year) & (df_copy.index.month <= 6))
-            )
-            df_copy = df_copy[mask]
+        elif mode == "fall":
+            start = pd.Timestamp(year=year, month=8, day=10)
+            end = pd.Timestamp(year=year, month=12, day=10) + pd.Timedelta(days=1)
+            df_copy = df_copy[(df_copy.index >= start) & (df_copy.index < end)]
         else:
             raise ValueError(f"Ukjent mode: '{mode}'")
 
