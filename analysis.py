@@ -47,7 +47,6 @@ def collect_boxplot_data_by_building(variabel: str, state):
     bygg_labels = []
 
     for byggkode in state["buildings"]:
-        byggnavn = TILGJENGELIGE_BYGG.get(byggkode, byggkode)
         dfs, romnavn, _ = fetch_csv(building_number=byggkode)
 
         for df, rom in zip(dfs, romnavn):
@@ -117,7 +116,11 @@ def collect_threshold_scatter_data(variable: str, state, threshold: float, direc
             if variable not in df_filtrert.columns:
                 continue
 
-            serie = pd.to_numeric(df_filtrert[variable], errors="coerce").dropna()
+            serie = pd.Series(
+                pd.to_numeric(df_filtrert[variable], errors="coerce"),
+                index=df_filtrert.index
+            ).dropna()
+
             if serie.empty:
                 continue
 
@@ -345,7 +348,6 @@ def run_threshold_scatter_menu(state):
 
 
 def print_active_scope(state):
-    byggtekst = ", ".join(state["buildings"]) if state["buildings"] else "Ingen bygg valgt"
 
     if state["mode"] == "all":
         periodetekst = "Hele perioden"
@@ -365,8 +367,15 @@ def print_active_scope(state):
         periodetekst = "Ukjent periode"
 
     print("\nAktivt datasett:")
-    print(f"Bygg: {byggtekst}")
     print(f"Periode: {periodetekst}")
+
+    romvalg = state.get("rooms_by_building", {})
+
+    for byggkode in state["buildings"]:
+        valgte_rom = romvalg.get(byggkode)
+
+        if valgte_rom is not None:
+            print(f"Bygg {byggkode}: Rom: {','.join(valgte_rom)}")
 
 
 def prompt_year(prompt="Skriv inn år (ÅÅÅÅ) eller 'b': "):
@@ -446,10 +455,11 @@ def select_building(state):
 
             for i in byggkode:
                 if i in TILGJENGELIGE_BYGG:
-                    state["buildings"] += [i]
+                    state["buildings"].append(i)
                     print(f"✅ Bygg {i} er valgt.")
-            return
 
+            if state["buildings"]:
+                return
 
             print("❌ Ugyldig byggkode.")
             continue
@@ -554,11 +564,29 @@ def select_time_scope(state):
 
 
 def configure_scope(state):
-    print("\nVELG DATASETT")
-    select_building(state)
-    select_rooms(state)
-    select_time_scope(state)
-    print_active_scope(state)
+    while True:
+        print("\nDATASETT / SCOPE")
+        print("1. Endre bygg")
+        print("2. Endre rom")
+        print("3. Endre periode")
+        print("4. Vis aktivt scope")
+        print("b. Tilbake")
+
+        valg = input("Valg: ").strip().lower()
+
+        if valg == "1":
+            select_building(state)
+        elif valg == "2":
+            select_rooms(state)
+        elif valg == "3":
+            select_time_scope(state)
+        elif valg == "4":
+            print_active_scope(state)
+        elif valg == "b":
+            return
+        else:
+            print("❌ Ugyldig valg.")
+
 
 
 def room_is_selected(state, byggkode, rom):
@@ -569,8 +597,6 @@ def room_is_selected(state, byggkode, rom):
 
 
 def select_rooms(state):
-    state["rooms_by_building"] = {}
-
     for byggkode in state["buildings"]:
         while True:
             print(f"\nROMVALG FOR BYGG {byggkode}")
@@ -590,35 +616,39 @@ def select_rooms(state):
                 state["rooms_by_building"][byggkode] = None
                 break
 
-            print("1. Alle rom")
-            print("2. Velg rom")
             print("Tilgjengelige rom: " + ", ".join(tilgjengelige_rom))
+            inp = input(
+                "Oppgi ønskede rom som sifre uten skilletegn "
+                "(f.eks. 13 for rom 1 og 3). Trykk Enter for alle rom: "
+            ).strip()
 
-            valg = input("Velg rommodus: ").strip().lower()
-
-            if valg == "1":
+            if inp == "":
                 state["rooms_by_building"][byggkode] = None
                 print(f"✅ Alle rom i bygg {byggkode} er valgt.")
                 break
 
-            if valg == "2":
-                inp = input("Oppgi romnummer separert med komma, f.eks. 1,3: ").strip()
-                valgte_rom = [r.strip() for r in inp.split(",") if r.strip()]
-                ugyldige = [r for r in valgte_rom if r not in tilgjengelige_rom]
+            valgte_rom = []
+            ugyldige = []
 
-                if not valgte_rom:
-                    print("❌ Du må velge minst ett rom.")
-                    continue
+            for tegn in inp:
+                if tegn in tilgjengelige_rom:
+                    if tegn not in valgte_rom:
+                        valgte_rom.append(tegn)
+                else:
+                    ugyldige.append(tegn)
 
-                if ugyldige:
-                    print(f"❌ Ugyldige rom: {', '.join(ugyldige)}")
-                    continue
+            if not valgte_rom:
+                print("❌ Du må velge minst ett gyldig rom.")
+                continue
 
-                state["rooms_by_building"][byggkode] = valgte_rom
-                print(f"✅ Valgte rom i bygg {byggkode}: {', '.join(valgte_rom)}")
-                break
+            if ugyldige:
+                print(f"❌ Ugyldige rom: {', '.join(ugyldige)}")
+                continue
 
-            print("❌ Ugyldig valg.")
+            state["rooms_by_building"][byggkode] = valgte_rom
+            print(f"✅ Valgte rom i bygg {byggkode}: {', '.join(valgte_rom)}")
+            break
+
 
 
 
@@ -931,13 +961,18 @@ def _plot_distribution(serie: pd.Series, variable: str):
     # 4) Tegn histogrammet for *alle* data (uten range=...).
     #    Dermed kaster vi aldri datapunkter, men zoomer kun visningen etterpå.
     fig, ax = plt.subplots(figsize=(9, 6))
+
+    weights = np.ones_like(data) * 100 / len(data)
+
     ax.hist(
         data,
         bins=bins,
+        weights=weights,
         color="skyblue",
         edgecolor="black"
     )
-    ax.set_ylabel("Antall observasjoner")
+
+    ax.set_ylabel("Frekvens (%)")
     ax.set_xlabel(variable)
     ax.set_ylim(bottom=0)
 
@@ -1005,3 +1040,296 @@ def _plot_distribution(serie: pd.Series, variable: str):
 
 def run_data_availability(state):
     plot_room_data_availability(state)
+
+
+def prompt_semester_scope(state):
+    semester_state = state.copy()
+
+    while True:
+        print("\nVELG SEMESTER")
+        print("1. Høst")
+        print("2. Vår")
+        print("b. Tilbake")
+
+        valg = input("Velg semester: ").strip().lower()
+
+        if valg == "b":
+            return None
+
+        if valg not in {"1", "2"}:
+            print("❌ Ugyldig valg. Prøv igjen.")
+            continue
+
+        år = prompt_year()
+        if år is None:
+            continue
+
+        reset_time_scope(semester_state)
+        semester_state["mode"] = "fall" if valg == "1" else "spring"
+        semester_state["year"] = år
+
+        return semester_state
+
+
+def get_semester_threshold_rule(variable: str):
+    if variable == "Temperatur (°C)":
+        return {
+            "lower": THRESHOLDS_TEMPERATURE["night"]["min"],
+            "upper": THRESHOLDS_TEMPERATURE["day"]["max"],
+            "lower_label": "For kaldt (%)",
+            "upper_label": "For varmt (%)",
+            "lower_pass_label": "Oppfyller kald-kravet",
+            "upper_pass_label": "Oppfyller varm-kravet",
+            "two_sided": True,
+        }
+
+    if variable == "Luftfuktighet (%)":
+        limits = THRESHOLDS_OPTIMAL_HUMIDITY["Humidity (%)"]
+        return {
+            "lower": limits["critical_min"],
+            "upper": limits["critical_max"],
+            "lower_label": "For tørt (%)",
+            "upper_label": "For fuktig (%)",
+            "lower_pass_label": "Oppfyller tørr-kravet",
+            "upper_pass_label": "Oppfyller fuktig-kravet",
+            "two_sided": True,
+        }
+
+    upper = THRESHOLDS_CRITICAL.get(variable)
+    if upper is not None:
+        return {
+            "lower": None,
+            "upper": upper,
+            "upper_label": "Over grense (%)",
+            "upper_pass_label": "Oppfyller 5 %-kravet",
+            "two_sided": False,
+        }
+
+    return None
+
+
+def median_exceedance(series: pd.Series, threshold: float, direction: str) -> float:
+    if direction == "below":
+        exceedance = (threshold - series[series < threshold]).dropna()
+    elif direction == "above":
+        exceedance = (series[series > threshold] - threshold).dropna()
+    else:
+        raise ValueError(f"Ukjent retning: {direction}")
+
+    if exceedance.empty:
+        return 0.0
+
+    return round(float(exceedance.median()), 2)
+
+
+def longest_breach_duration_hours(mask: pd.Series) -> int:
+    if mask.empty or not mask.any():
+        return 0
+
+    mask = mask.astype(bool)
+    change_groups = (mask != mask.shift()).cumsum()
+    run_lengths = mask.groupby(change_groups).sum()
+
+    if run_lengths.empty:
+        return 0
+
+    return int(run_lengths.max())
+
+def max_exceedance(series: pd.Series, threshold: float, direction: str) -> float:
+    if direction == "below":
+        exceedance = (threshold - series[series < threshold]).dropna()
+    elif direction == "above":
+        exceedance = (series[series > threshold] - threshold).dropna()
+    else:
+        raise ValueError(f"Ukjent retning: {direction}")
+
+    if exceedance.empty:
+        return 0.0
+
+    return round(float(exceedance.max()), 2)
+
+
+def collect_semester_summary_by_building(variable: str, state, max_outside_pct: float = 5.0) -> pd.DataFrame:
+    rows = []
+    rule = get_semester_threshold_rule(variable)
+
+    if rule is None:
+        return pd.DataFrame()
+
+    lower_limit = rule["lower"]
+    upper_limit = rule["upper"]
+
+    if lower_limit is None and upper_limit is None:
+        return pd.DataFrame()
+
+    for byggkode in state["buildings"]:
+        try:
+            dfs, romnavn, _ = fetch_csv(building_number=byggkode)
+        except Exception as e:
+            print(f"⚠️ Klarte ikke hente data for bygg {byggkode}: {e}")
+            continue
+
+        building_series: list[pd.Series] = []
+        room_stats = []
+
+        for df, rom in zip(dfs, romnavn):
+            if not room_is_selected(state, byggkode, rom):
+                continue
+
+            df = set_datetime_index(df)
+
+            filtrerte_liste = filter_data(
+                [df],
+                mode=state["mode"],
+                year=state["year"],
+                month=state["month"],
+                week=state["week"],
+                day=state["day"]
+            )
+
+            if not filtrerte_liste:
+                continue
+
+            df_filtrert = filtrerte_liste[0]
+
+            if variable not in df_filtrert.columns:
+                continue
+
+            serie = pd.Series(
+                pd.to_numeric(df_filtrert[variable], errors="coerce"),
+                index=df_filtrert.index
+            ).dropna()
+
+            if serie.empty:
+                continue
+
+            building_series.append(serie)
+
+            room_below_mask = pd.Series(False, index=serie.index)
+            room_above_mask = pd.Series(False, index=serie.index)
+
+            if lower_limit is not None:
+                room_below_mask = serie < lower_limit
+            if upper_limit is not None:
+                room_above_mask = serie > upper_limit
+
+            room_outside_pct = 100 * (room_below_mask | room_above_mask).mean()
+
+            room_stats.append({
+                "room": str(rom),
+                "outside_pct": room_outside_pct
+            })
+
+        if not building_series:
+            continue
+
+        samlet_serie = pd.Series(pd.concat(building_series, axis=0)).dropna()
+        if samlet_serie.empty:
+            continue
+
+        below_mask = pd.Series(False, index=samlet_serie.index)
+        above_mask = pd.Series(False, index=samlet_serie.index)
+
+        if lower_limit is not None:
+            below_mask = samlet_serie < lower_limit
+
+        if upper_limit is not None:
+            above_mask = samlet_serie > upper_limit
+
+        below_pct = 100 * below_mask.mean()
+        above_pct = 100 * above_mask.mean()
+
+        below_median_exceedance = 0.0
+        above_median_exceedance = 0.0
+        below_longest_hours = 0
+        above_longest_hours = 0
+        above_max_exceedance = 0.0
+
+        if lower_limit is not None:
+            below_median_exceedance = median_exceedance(samlet_serie, lower_limit, "below")
+            below_longest_hours = longest_breach_duration_hours(below_mask)
+
+        if upper_limit is not None:
+            above_median_exceedance = median_exceedance(samlet_serie, upper_limit, "above")
+            above_longest_hours = longest_breach_duration_hours(above_mask)
+            above_max_exceedance = max_exceedance(samlet_serie, upper_limit, "above")
+
+        worst_room = "-"
+        if room_stats:
+            worst_room = max(room_stats, key=lambda x: x["outside_pct"])["room"]
+
+        row = {
+            "Bygg": f"Bygg {int(byggkode)}",
+        }
+
+        if rule["two_sided"]:
+            row[rule["lower_label"]] = round(below_pct, 2)
+            row[rule["upper_label"]] = round(above_pct, 2)
+
+            if variable == "Temperatur (°C)":
+                row["Median kald-avvik"] = below_median_exceedance
+                row["Median varm-avvik"] = above_median_exceedance
+                row["Lengste kald-brudd (t)"] = below_longest_hours
+                row["Lengste varm-brudd (t)"] = above_longest_hours
+            else:
+                row["Median tørr-avvik"] = below_median_exceedance
+                row["Median fuktig-avvik"] = above_median_exceedance
+                row["Lengste tørre brudd (t)"] = below_longest_hours
+                row["Lengste fuktige brudd (t)"] = above_longest_hours
+
+            row[rule["lower_pass_label"]] = "Ja" if below_pct < max_outside_pct else "Nei"
+            row[rule["upper_pass_label"]] = "Ja" if above_pct < max_outside_pct else "Nei"
+
+        else:
+            row[rule["upper_label"]] = round(above_pct, 2)
+            row["Median overskridelse"] = above_median_exceedance
+            row["Maks overskridelse"] = above_max_exceedance
+            row["Lengste brudd (t)"] = above_longest_hours
+            row[rule["upper_pass_label"]] = "Ja" if above_pct < max_outside_pct else "Nei"
+
+        row["Verste rom"] = f"Rom {worst_room}" if worst_room != "-" else "-"
+        rows.append(row)
+
+
+    if not rows:
+        return pd.DataFrame()
+
+    summary_df = pd.DataFrame(rows)
+    summary_df["Bygg_sort"] = summary_df["Bygg"].str.extract(r"(\d+)").astype(int)
+    summary_df.sort_values(by=["Bygg_sort"], inplace=True)
+    summary_df.drop(columns=["Bygg_sort"], inplace=True)
+    summary_df.reset_index(drop=True, inplace=True)
+
+    return summary_df
+
+
+
+
+def run_semester_analysis(state):
+    semester_state = prompt_semester_scope(state)
+    if semester_state is None:
+        return
+
+    print("\nSEMESTERANALYSE PER BYGG")
+    print("Kriterium: mindre enn 5 % av målingene utenfor grenseverdiene")
+    print(f"Periode: {format_scope_label(semester_state)}")
+
+    for variable in VARIABLE_CHOICES.values():
+        summary_df = collect_semester_summary_by_building(
+            variable,
+            semester_state,
+            max_outside_pct=5.0
+        )
+
+        print(f"\n{variable}")
+        print("-" * len(variable))
+
+        if summary_df.empty:
+            print("Ingen data funnet for denne variabelen.")
+            continue
+
+        with pd.option_context("display.max_columns", None, "display.width", 1400):
+            print(summary_df.to_string(index=False))
+            print()
+
+

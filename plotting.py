@@ -5,7 +5,6 @@ import matplotlib.dates as mdates
 
 
 from matplotlib import cm
-from matplotlib.legend import Legend
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
 from matplotlib.ticker import FixedLocator, FixedFormatter, MultipleLocator
 
@@ -247,19 +246,8 @@ def plot_temperature(df_list: List[pd.DataFrame],
 
     ax.set_title(build_plot_title(title_subject, "temperatur", period_label))
 
-    # 11) Legend for rom
-    if room_lines:
-        room_legend = ax.legend(
-            room_lines,
-            room_labels,
-            loc="upper left",
-            bbox_to_anchor=(1, 1),
-            title="Rom",
-            frameon=True
-        )
-        ax.add_artist(room_legend)
 
-    # 12) Legend for tersklene
+    # 11) Legend for tersklene
     if threshold_handles:
         ax.legend(
             threshold_handles,
@@ -270,7 +258,7 @@ def plot_temperature(df_list: List[pd.DataFrame],
             frameon=True
         )
 
-    # 13) Juster marger manuelt
+    # 12) Juster marger manuelt
     if ax_weather is not None:
         fig.subplots_adjust(left=0.07, right=0.80, top=0.92, bottom=0.10, hspace=0.15)
     else:
@@ -396,7 +384,7 @@ def plot_humidity(
         else:
             ax.axhline(y=nivaa_vis, color=farge, linestyle="--", linewidth=2)
 
-    ax.set_ylabel("Luftfuktighet (%)")
+    ax.set_ylabel("Relative luftfuktighet (%)")
     ax.grid(True)
 
     # 7) Plot utendorsdata hvis tilgjengelig
@@ -486,21 +474,10 @@ def plot_humidity(
     if title_subject is None:
         title_subject = f"Bygg {byggkode}" if byggkode else "Valgte rom"
 
-    ax.set_title(build_plot_title(title_subject, "temperatur", period_label))
+    ax.set_title(build_plot_title(title_subject, "Relative luftfuktighet (%)", period_label))
 
-    # 11) Legend for rom
-    if room_lines:
-        room_legend = ax.legend(
-            room_lines,
-            room_labels,
-            loc="upper left",
-            bbox_to_anchor=(1, 1),
-            title="Rom",
-            frameon=True
-        )
-        ax.add_artist(room_legend)
 
-    # 12) Legend for tersklene
+    # 11) Legend for tersklene
     if threshold_handles:
         ax.legend(
             threshold_handles,
@@ -511,7 +488,7 @@ def plot_humidity(
             frameon=True
         )
 
-    # 13) Juster marger manuelt
+    # 12) Juster marger manuelt
     if ax_weather is not None:
         fig.subplots_adjust(left=0.07, right=0.80, top=0.92, bottom=0.10, hspace=0.15)
     else:
@@ -577,8 +554,8 @@ def plot_all_rooms_variable(
         y_max = 2 * critical_value
 
         terskler = [
-            (critical_value, "red",   "Kritisk nivaa"),
-            (warn_value,     "green", "Optimal nivaa")
+            (critical_value, "red",   "Kritisk nivå"),
+            (warn_value,     "green", "Optimal nivå")
         ]
 
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -648,11 +625,6 @@ def plot_all_rooms_variable(
 
     ax.grid(True, axis="x", which="minor", linestyle=":", linewidth=0.4)
 
-    for child in ax.get_children():
-        if isinstance(child, Legend):
-            labels = [text.get_text() for text in child.get_texts()]
-            if any("Rom" in lbl for lbl in labels):
-                child.remove()
 
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1), title="Terskler", frameon=True)
     plt.tight_layout()
@@ -780,7 +752,7 @@ def plot_room_data_availability(state, mappe: Path = INNEKLIMA_DIR):
         print("❌ Ingen data å vise for valgt datasett.")
         return
 
-    df["Etikett"] = "B" + df["Bygg"] + " Rom" + df["Rom"]
+    df["Etikett"] = "B" + df["Bygg"] + "-R" + df["Rom"]
     df.sort_values(by=["Etikett", "Start"], inplace=True)
     df.reset_index(drop=True, inplace=True)
 

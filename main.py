@@ -17,7 +17,7 @@ app_state = {
 def print_main_menu():
     print("\nHOVEDMENY")
     print("1. Velg eller endre datasett")
-    print("2. Vis aktivt datasett")
+    print("2. Semesteranalyse")
     print("3. Fordeling (histogram)")
     print("4. Tidsserie")
     print("5. Boxplot")
@@ -33,7 +33,7 @@ def main():
         if valg == "1":
             analysis.configure_scope(app_state)
         elif valg == "2":
-            analysis.print_active_scope(app_state)
+            analysis.run_semester_analysis(app_state)
         elif valg == "3":
             analysis.run_distribution(app_state)
         elif valg == "4":
