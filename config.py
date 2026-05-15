@@ -14,7 +14,7 @@ KUNAK_FILE   = BASE_DATA_DIR / "Kunak.csv"
 
 # Prefix‐mal for inneklima‐filer:
 # - Filnavn ser ut som: data_RES08xxx.csv for Bygg 08
-# - Vi bruker mal: "data_RES{bygg}01" der {bygg} er to sifre
+# - Bruker mal: "data_RES{bygg}01" der {bygg} er to sifre
 
 
 INNEKLIMA_PREFIX_TEMPLATE = "data_RES0{bygg}01"
@@ -68,7 +68,7 @@ PM_VARIABLER = [
 
 THRESHOLDS_TEMPERATURE = {
     "day":   {"min": 21, "max": 26},
-    "night": {"min": 18, "max": 21},
+    "night": {"min": 19, "max": 21},
     "night_hours": (22, 7)
 }
 

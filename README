@@ -1,167 +1,179 @@
-README fil for å gi en oversikt av hvordan programmet fungerer.
+# ENE306 analyseverktøy
 
-Readme og selve koden er hovedsakelig produsert av OpenAI o4-mini, med aktiv prompt og filopplasning av selve koden. 
-CSV filene med dataene er ikke sendt inn i KI.
+Dette prosjektet lager rapportfigurer og tabellgrunnlag for analyse av inneklimadata.
+Koden er delt i moduler med tydelig ansvar, slik at metode, figurer og tabeller kan kontrolleres hver for seg.
 
-OpenAI, “ChatGPT (OpenAI o4-mini),” OpenAI API, [Online]. Tilgjengelig: https://platform.openai.com. [Hentet: 1. juni 2025].
+## Filstruktur
 
+- `config.py`: faste innstillinger, filstier, bygg, variabelnavn og terskelverdier.
+- `data_processing.py`: leser CSV-filer, standardiserer tid, oversetter kolonnenavn og filtrerer perioder.
+- `analysis.py`: samler data for valgt bygg, rom og periode, og lager tabellgrunnlag.
+- `plotting.py`: lager og lagrer figurer. Filen leser ikke CSV-data direkte.
+- `main.py`: terminalmeny for brukerens valg.
+- `figurer/`: mappe der figurer lagres som PDF.
+- `tabeller/`: mappe der semesterpakken lagrer CSV-tabeller.
 
-/prosjektrot
-├── config.py                 # Generelle konfigurasjoner (filbaner, terskler)
-├── data_processing.py        # Leser og bearbeider CSV-data til DataFrames
-├── plotting.py               # Alle plot-funksjoner og dekningsgrad‐logikk
-├── building_analysis.py      # “Dykker ned” i ett bygg: valg av periode/variabel
-├── analysis.py               # “Utforsk data” på tvers av alle bygg/rom
-├── main.py                   # CLI-meny (to varianter eksisterer, én forenklet)
-└── CSV/                      # Underkatalog med rå CSV-filer
-    ├── Seklima.csv
-    ├── Kunak.csv
-    ├── data_RES01…csv        # Inneklima-filer for Bygg 01
-    ├── data_RES02…csv        # Inneklima-filer for Bygg 02
-    └── …                     # Osv. for andre bygg (04, 05, 07, 08)
+## Bruk
 
+Kjør `main.py` i PyCharm. Hovedmenyen lar deg:
 
-**Forklaring av hovedfilene**  
-- `config.py`  
-  - Inneholder grunnkonfigurasjon: filbaner, sensorer, terskelverdier, variable-navn osv.
+1. velge bygg, rom og periode
+2. lage tidsseriefigur
+3. lage boxplot med tabellverdier
+4. lage datadekning per rom
+5. kjøre alle rapportfigurer for et valgt semester
 
-- `data_processing.py`  
-  - Funksjoner for å lese inn CSV-filer, opprette datetime-indeks, resample-data til timeverdier og filtrere data etter ønsket tidsperiode.
+Nærmeste zoom-nivå i menyen er uke. Du kan også velge måned, semester, år eller hele måleperioden.
+I tidsserie- og boxplotmenyen vises luftpartikler som ett samlet valg. Dette gir én samlet figur med PM1, PM2.5, PM4 og PM10 som subplots.
 
-- `plotting.py`  
-  - Visualisering:  
-    - Temperatur- og luftfuktighetsplott (innendørs og utendørs).  
-    - Plotting av CO₂, formaldhyd, TVOC og partikler (PM 1, 2.5, 4 og 10).  
-    - Oversikt over datadekning per rom (Gantt-lignende visning).  
-    - Tabeller for dekningsgrad (prosentdel) per rom.
+## Databehandling
 
-- `building_analysis.py`  
-  - Menystyrt modul for å velge ett bygg, periode (år, vinter, sommer, måned, uke eller dag) og én variabel (f.eks. temperatur eller CO₂).  
-  - Kaller riktig plotting-funksjon basert på brukervalg.
+Dette er den generelle databehandlingen som brukes før figurer og tabeller lages.
+Rådatafilene endres ikke av programmet.
 
-- `analysis.py`  
-  - Menystyrte funksjoner for global datautforskning (tidsserier og fordelingsplot) over alle bygg og rom.  
-  - Beregner spredningsmål, antall timer over terskel og prosent over terskel for alle bygg/variable.
+### 1. Valg av filer og rom
 
-- `main.py`  
-  - Hovedprogram:  
-    - Viser hovedmeny.  
-    - Henter inn alle data (cache) ved oppstart.  
-    - Leder brukeren til utforskning (analysis), bygg-analyse (building_analysis) eller datadekning (plotting).
+- Inneklimadata leses fra mappen som er definert i `config.py`.
+- Filene filtreres etter byggnummer og sorteres før lesing, slik at samme datagrunnlag gir samme rekkefølge hver gang.
+- Romnummer hentes fra filnavnet. Et filnavn som inneholder `RES08015` tolkes som rom `5`.
+- Dersom flere filer peker på samme rom i samme bygg, brukes første fil i sortert rekkefølge, og duplikatet hoppes over.
+- Hvis brukeren har valgt enkelte rom, fjernes andre rom før videre analyse.
 
----
+### 2. Tid og måleverdier
 
-## Krav
+- Kolonnene `Date` og `Time` kombineres til én datetime-indeks.
+- Rader der tidspunkt ikke kan tolkes fjernes.
+- Ubrukte kolonner som `Date`, `Time` og `Virus Index` fjernes fra analysegrunnlaget.
+- Kolonnenavn oversettes til norske rapportnavn, for eksempel `Temperature (C)` til `Temperatur (°C)`.
+- Måleverdier konverteres til tall. Både komma og punktum håndteres som desimalskilletegn.
+- Verdier som ikke kan tolkes som tall blir satt til manglende verdi.
 
-- Python 3.8 eller nyere  
-- Biblioteker:  
-  - `pandas`  
-  - `numpy`  
-  - `matplotlib`  
+### 3. Timesmiddel og manglende data
 
----
+- Inneklimadata resamples til timesmiddel med `1h`.
+- Hvis flere målinger finnes innen samme time, brukes gjennomsnittet for den timen.
+- Timer der alle målevariabler mangler fjernes.
+- Manglende enkeltverdier beholdes som manglende verdi for den aktuelle variabelen.
+- Tidsseriefigurene bryter linjen ved tidshull, slik at manglende perioder ikke tegnes som kontinuerlige målinger.
 
-## Oppsett og installasjon
+### 4. Periodefiltrering
 
-1. **Last ned eller klon** dette repositoriet til lokal maskin.  
-2. Sørg for at du har Python 3.8 eller nyere installert.  
-3. Installer nødvendige Python-pakker. Eksempelvis:  
-   
-       pip install pandas numpy matplotlib  
+Etter standardisering filtreres data til aktiv periode:
 
-   (Ovenstående kan kopieres og limes direkte inn i terminal eller kommandoprompt, uten spesifikk språk-identifikator.)
+- `Hele perioden`: alle tilgjengelige tider etter databehandling.
+- `År`: 1. januar til og med 31. desember for valgt år.
+- `Måned`: valgt måned i valgt år.
+- `Uke`: valgt ISO-uke i valgt år.
+- `Vårsemester`: 6. januar til og med 6. juni.
+- `Høstsemester`: 10. august til og med 10. desember.
 
-4. **Legg datafiler i riktig katalog**: Opprett en mappe som heter `CSV` i prosjektroten, og plasser følgende filer der:  
-   - Alle inneklima-CSV-filer for hvert bygg (filnavnene begynner med `data_RES{bygg}...csv`).  
-   - `Seklima.csv` (utendørstemperaturdata).  
-   - `Kunak.csv` (utendørluftfuktighetsdata).
+Semesterpakken bruker valgt bygg- og romutvalg, men setter perioden til valgt vår- eller høstsemester.
 
-5. **Kjør programmet** fra prosjektroten med:  
-   
-       python main.py  
+### 5. Uteklima
 
----
+Uteklima behandles separat fra inneklimadata:
 
-## Hvordan bruke programmet
+- `Seklima.csv` og `Kunak.csv` leses som egne kilder.
+- Temperatur og relativ fuktighet beholdes fra begge kilder.
+- Tidspunkt konverteres til datetime-indeks.
+- Kildene flettes med `outer join`, slik at målinger fra én kilde ikke fjernes fordi den andre mangler data.
+- Uteklima filtreres med samme perioderegel som inneklimadata før plotting.
 
-Når du kjører `python main.py`, vises en hovedmeny med tre valg:
+## Datatilgjengelighet
 
-1. **Utforsk data (global analyse)**  
-   - Velg “1” for å gå til modul for global datautforskning.  
-   - Undermenyen lar deg velge:  
-     - Tidsserie for én variabel over alle bygg/rom.  
-     - Fordelingsplot (histogram og KDE) for én variabel.  
-     - Spredningsmål (standardavvik og kvartiler) for én variabel.  
-     - Tabell med antall timer over terskel og prosent over terskel for alle bygg/variable.  
+Datatilgjengelighetsfiguren viser hvilke rom som har data på hvilke datoer etter at dataene er lest, standardisert,
+resamplet til timesmiddel og filtrert til valgt periode.
 
-2. **Bygg-analyse**  
-   - Velg “2” for å gå til byggspesifikk analyse. Du blir bedt om å:  
-     1. Velge bygg fra en liste (f.eks. RES01012, RES01013 osv.).  
-     2. Velge tidsperiode:  
-        - År (f.eks. 2023)  
-        - Vinter (oktober–mars)  
-        - Sommer (april–september)  
-        - Måned (måned + år, f.eks. 04-2024)  
-        - Uke (uke + år, f.eks. uke 12 2025)  
-        - Dag (eksakt dato i format YYYY-MM-DD)  
-     3. Velge variabel:  
-        - **Temperatur (°C)**: Viser innendørs temperatur per rom, sammenligner med utendørstemperatur.  
-        - **Luftfuktighet (%)**: Viser innendørs luftfuktighet per rom, sammenligner med utendørsluftfuktighet.  
-        - **Luftkvalitetsvariabler (CO₂, formaldehyd, TVOC, PM1, PM2.5, PM4, PM10)**: Viser tidsserieøkter med varsel- og kritiske terskelnivåer.  
+Slik beregnes figuren:
 
-3. **Datadekning (sensor-tilgjengelighet)**  
-   - Velg “3” for å vise hvor mye data som finnes per rom i alle bygg.  
-   - Programmet gir:  
-     - En Gantt-lignende visning (i matplotlib) som viser hvilke dager hvert rom har data.  
-     - Tabeller med prosentvis dekningsgrad per rom (hvor mange timer data finnes i forhold til total mulig).
+- Programmet går gjennom alle rom i aktivt utvalg.
+- For hvert rom hentes de filtrerte timesradene som finnes etter databehandling.
+- Datoen til hver timesrad normaliseres til kalenderdag.
+- Hver unik dato tegnes som én horisontal daglinje fra kl. 00:00 til neste døgn.
+- Fargen viser hvilket bygg rommet tilhører.
 
-4. **Avslutte programmet**  
-   - Velg “0” i hovedmenyen for å lukke programmet.  
+Viktig tolkning:
 
-Du kan når som helst taste “b” for å gå ett nivå tilbake i menyene.
----
+- Figuren viser om rommet har minst én gyldig timesrad den dagen.
+- Figuren viser ikke hvor mange timer med data som finnes innenfor døgnet.
+- En dag med én gyldig time og en dag med 24 gyldige timer vises derfor likt i denne figuren.
+- Mer detaljert omfang per rom finnes i tabellen `sensor_maleperiode_<periode>.csv`,
+som viser første måling, siste måling og antall timer med data per rom.
 
-## Eksempel
+## Semesterpakke
 
-Under er et enkelt eksempel på hvordan du kan kjøre en temperatur-plot for ett bygg og én måned:
+Menyvalget `Kjør alt for et semester` bruker aktivt bygg- og romutvalg,
+setter perioden til valgt vår- eller høstsemester, og kjører:
 
-1. Åpne terminal (eller kommandoprompt) i prosjektroten.  
-2. Kjør:
+- datadekning per rom
+- tidsserier for temperatur og relativ luftfuktighet med uteklima
+- tidsserier for CO2, formaldehyd og TVOC
+- samlet tidsseriefigur for luftpartikkelvariabler i 2x2 subplots
+- boxplot for temperatur, relativ luftfuktighet, CO2, formaldehyd og TVOC
+- samlet boxplot for luftpartikkelvariabler i 2x2 subplots
+- én samlet CSV-tabell med boxplotverdier, tid under/over terskel, antall brudd, lengste brudd og 5 %-vurdering
+- én egen CSV-tabell med Formaldehyd og TVOC beregnet per rom
+- én egen CSV-tabell med første og siste måling for hvert rom
 
-       python main.py
+Før kjøring skriver programmet ut en databehandlingsoversikt. Den viser aktivt utvalg, variabler og behandlingstrinn,
+slik at metoden kan dokumenteres. Figurene lagres direkte uten forhåndsvisning under semesterkjøring. Selve boxplot-tabellene printes ikke under semesterkjøring,
+men lagres i `tabeller/<periode>/`. Når semesterpakken er ferdig, avsluttes programmet automatisk.
 
-3. Tast “2” for "Bygg-analyse".  
-4. Velg bygg, for eksempel “RES01012”.  
-5. Velg periode:  
-   - Tast “3” for “Måned”.  
-   - Tast “04” (april) når du blir bedt om måned.  
-   - Tast “2024” når du blir bedt om år.  
-6. Velg variabel:  
-   - Tast “1” for "Temperatur".  
+## Figurer
 
-Programmet vil da hente alle temperaturdata for alle sensorer i **RES01012** i april 2024, plotte dem i én figur pr. rom, og vise utendørstemperatur over samme periode for sammenligning.
+Figurene er laget for rapportbruk:
 
----
+- Figurer lagres automatisk som PDF i `figurer/<periode>/`.
+- Figurene bruker høy lagringsoppløsning, større tekst og tydelig kontrast for rapportbruk.
+- Filnavn er stabile og basert på figurtype, variabel og periode.
+- Tidsserier viser faktisk start- og sluttdato i tittelen.
+- Tidsserier viser ikke romlegend, fordi mange rom gjør legend lite lesbar.
+- Partikkelverdier vises samlet i 2x2 subplots for både tidsserie og boxplot.
+- Terskler vises i egen legend.
+- Uteklima vises med legendtittel `Uteklima kilder`.
+- Verdier utenfor faste y-grenser markeres i figuren.
+- Boxplot viser outlier-punkter og teller outliers i terminaltabellen eller tabellfilen.
 
-## Kontakt og videre hjelp
+## Tabellverdier
 
-Hvis du støter på problemer, kan du:
+Ved enkeltkjøring skriver boxplot tabellverdier i terminalen.
+Ved semesterkjøring lagres alle boxplot- og terskelverdier samlet som CSV.
+I tillegg lagres en egen romvis CSV for Formaldehyd og TVOC,
+samt en egen oversikt over første og siste gyldige måling per rom.
+Den romvise Formaldehyd/TVOC-tabellen inneholder også `Q4`, definert som estimert øvre boxplot-grense: `Q3 + 1,5 * IQR`.
 
-- Sjekke at alle pakkene (`pandas`, `numpy`, `matplotlib`) er installert i riktig Python-miljø.  
-- Bekrefte at filnavn og kolonnenavn i CSV-filer stemmer overens med det koden forventer (Se `data_processing.py` for detaljer).  
-- Legge inn issues på GitHub (hvis prosjektet ligger der), eller ta kontakt med prosjektleder for Campus‐avdelingen som har ansvar for inneklimadata.
+Tabellverdier avrundes etter sensorens måleoppløsning. Temperatur vises med én desimal, mens relativ fuktighet, CO2, TVOC, formaldehyd og luftpartikler vises i hele enheter.
 
-## Tips og anbefalinger
+Den samlede tabellen inneholder:
 
-- **Oppdatere terskelverdier**  
-  - Dersom terskelverdiene for CO₂, temperatur eller andre variabler endres, kan du oppdatere dem i `config.py`.  
-  - 
-- **Laste nye CSV-filer**  
-  - Dersom du legger til flere inneklima-filer under `CSV/`, vil de automatisk bli plukket opp når du kjører `main.py` på nytt.  
-  - 
-- **Feilmeldinger**  
-  - Hvis et bygg eller en periode ikke har data, vil programmet skrive en melding i terminalen om at ingen data ble funnet. Sjekk at CSV-filenes tidsstempler er korrekte og at kolonnenavn stemmer overens med det som forventes i koden.  
+- bygg
+- antall rom med gyldige målinger for aktuell variabel og periode
+- antall målinger
+- Q1
+- Q3
+- IQR
+- nedre outliers
+- øvre outliers
+- nedre og øvre terskel
+- tid under terskel (% tid)
+- tid over terskel (% tid)
+- antall brudd, der ett brudd er en sammenhengende periode utenfor terskel
+- lengste brudd målt i timer
+- vurdering av om grensebrudd er under 5,00 %
 
-- **Dokumentasjon og videre utvikling**  
-  - Studer docstrings i hver fil for detaljer om funksjonsparametre.  
-  - Dersom du ønsker å legge til nye variabler eller nye analyser, kan du kopiere strukturen fra eksisterende funksjoner i `analysis.py` eller `building_analysis.py`.  
+For byggtabellen summeres antall brudd rom for rom.
+Lengste brudd er den lengste sammenhengende bruddperioden funnet i ett rom innen bygget.
+
+Outliers telles med IQR-regelen:
+
+`Q1 - 1,5 * IQR` og `Q3 + 1,5 * IQR`.
+
+## Reproduserbarhet
+
+Samme datagrunnlag og samme utvalg skal gi samme figur og samme tabell:
+
+- CSV-filer sorteres før lesing.
+- Bygg og rom behandles i stabil rekkefølge.
+- Data resamples alltid til samme tidsoppløsning før analyse.
+- Figurer og tabeller lagres med stabile filnavn.
+

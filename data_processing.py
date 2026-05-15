@@ -1,259 +1,249 @@
+"""
+Databehandling for ENE306-analyseverktøyet.
+
+Denne modulen har ett ansvar: lese rå CSV-filer og gjøre dem klare for analyse.
+All brukerinteraksjon ligger i main.py, og all plotting ligger i plotting.py.
+"""
+
+from __future__ import annotations
+
 import os
+from pathlib import Path
+from typing import List, Optional, Tuple
+
 import pandas as pd
 
-from pathlib import Path
-from typing import List, Tuple, Optional
-from config import (SEKLIMA_FILE, KUNAK_FILE, INNEKLIMA_PREFIX_TEMPLATE, INNEKLIMA_DIR)
+from config import INNEKLIMA_DIR, INNEKLIMA_PREFIX_TEMPLATE, KUNAK_FILE, SEKLIMA_FILE
 
-def fetch_csv(directory: Path = INNEKLIMA_DIR, building_number: str = "7", filenames: Optional[List[str]] = None)\
-        -> Tuple[List[pd.DataFrame], List[str], int]:
+
+COLUMN_TRANSLATIONS = {
+    "Temperature (°C)": "Temperatur (°C)",
+    "Humidity (%)": "Luftfuktighet (%)",
+    "Formaldehyde (µg/m³)": "Formaldehyd (µg/m³)",
+    "TVOC (ppb)": "TVOC (ppb)",
+    "PM 1.0 (µg/m³)": "PM 1.0 (µg/m³)",
+    "PM 2.5 (µg/m³)": "PM 2.5 (µg/m³)",
+    "PM 4.0 (µg/m³)": "PM 4.0 (µg/m³)",
+    "PM 10 (µg/m³)": "PM 10 (µg/m³)",
+    "CO2 (ppm)": "CO2 (ppm)",
+}
+
+
+def extract_room_number(filename: str) -> str:
+    """Hent romnummer fra filnavn på formen data_RES08015_....csv."""
+    try:
+        room_code = filename.split("RES")[1].split("_")[0]
+        return str(int(room_code[-1]))
+    except (IndexError, ValueError) as error:
+        raise ValueError(f"Kan ikke hente romnummer fra filnavnet '{filename}'.") from error
+
+
+def list_room_numbers(directory: Path = INNEKLIMA_DIR, building_number: str = "7") -> List[str]:
+    """List rom som finnes for ett bygg uten å lese hele CSV-innholdet."""
+    prefix = INNEKLIMA_PREFIX_TEMPLATE.format(bygg=building_number)
+    rooms = []
+
+    for filename in sorted(os.listdir(directory)):
+        if filename.startswith(prefix) and filename.lower().endswith(".csv"):
+            rooms.append(extract_room_number(filename))
+
+    return sorted(set(rooms), key=int)
+
+
+def fetch_csv(
+    directory: Path = INNEKLIMA_DIR,
+    building_number: str = "7",
+    filenames: Optional[List[str]] = None,
+) -> Tuple[List[pd.DataFrame], List[str], int]:
+    """Les inneklima-CSV-filer for ett bygg.
+
+    Filene sorteres alfabetisk før lesing. Det gjør rekkefølgen stabil fra kjøring
+    til kjøring, og er viktig for reproduserbare figurer.
     """
-    Leser alle inneklima‐CSV‐filer for ett bygg, og returnerer:
-      - dfs: List[pd.DataFrame], én DataFrame per rom
-      - romnavn: List[str], romnummer (som string)
-      - antall innleste DataFrames: int
-
-    Args:
-      directory      : Path til mappa med inneklima‐filer
-      building_number: Byggkode, f.eks. "7"
-      filenames      : Hvis man vil spesifisere en separat liste over filnavn
-
-    Filnavn‐mønster: data_RES{bygg}01... .csv
-      - Ex: "data_RES08015_09_56_04.csv"
-      - Vi trekker ut siste siffer fra 'RES'-delen som romnummer.
-    """
-    dfs: List[pd.DataFrame] = []
-    romnavn: List[str] = []
-    registrerte_rom = set()
+    data_frames: List[pd.DataFrame] = []
+    room_names: List[str] = []
+    registered_rooms: set[str] = set()
 
     prefix = INNEKLIMA_PREFIX_TEMPLATE.format(bygg=building_number)
-
-    # Hent alle CSV‐filer som starter med prefix, eller bruk en forhåndsdefinert liste
     if filenames is None:
-        alle_filer = [
-            f for f in os.listdir(directory)
-            if f.startswith(prefix) and f.lower().endswith(".csv")
+        filenames = [
+            filename
+            for filename in os.listdir(directory)
+            if filename.startswith(prefix) and filename.lower().endswith(".csv")
         ]
-    else:
-        alle_filer = filenames.copy()
 
-    alle_filer.sort()  # Sørg for deterministisk rekkefølge
-
-    for f_name in alle_filer:
-        file_path = directory / f_name
+    for filename in sorted(filenames):
+        file_path = directory / filename
         if not file_path.exists():
-            print(f"⚠️ Filen {file_path} finnes ikke – hopper over.")
+            print(f"Advarsel: Fant ikke {file_path}. Filen hoppes over.")
             continue
 
         try:
-            # Filnavn: data_RES08015_09_56_04.csv
-            # Del opp for å hente romkode (f.eks. "08015"), og romnummer = siste siffer
-            delen_etter_res = f_name.split("RES")[1]        # "08015_09_56_04.csv"
-            romkode = delen_etter_res.split("_")[0]         # "08015"
-            romnummer = str(int(romkode[-1]))               # “5” → rom “5”
-
-            if romnummer in registrerte_rom:
-                print(f"ℹ️ Duplikat funnet for rom {romnummer} – hopper over {f_name}")
+            room_number = extract_room_number(filename)
+            if room_number in registered_rooms:
+                print(f"Info: Duplikat for rom {room_number}. {filename} hoppes over.")
                 continue
 
-            df = pd.read_csv(file_path, sep=';')
-            dfs.append(df)
-            romnavn.append(romnummer)
-            registrerte_rom.add(romnummer)
+            data_frames.append(pd.read_csv(file_path, sep=";"))
+            room_names.append(room_number)
+            registered_rooms.add(room_number)
+        except Exception as error:
+            print(f"Advarsel: Kunne ikke lese {filename}: {error}")
 
-        except Exception as e:
-            print(f"⚠️ Kunne ikke lese fil {f_name}: {e}")
-            continue
-
-    return dfs, romnavn, len(dfs)
+    return data_frames, room_names, len(data_frames)
 
 
-def fetch_weather(seklima_path: Path = SEKLIMA_FILE, kunak_path: Path   = KUNAK_FILE) -> pd.DataFrame:
-    """
-    Leser og kombinerer Seklima‐ og Kunak‐CSV til én DataFrame med kolonnene:
-      ['utetemp_seklima', 'ute_rh_seklima', 'utetemp_kunak', 'ute_rh_kunak']
-
-    Returnerer:
-      - En DataFrame med index = pd.DatetimeIndex
-      - Hvis ingen data finnes, kan den være tom, men definitivt ha en datetime‐index.
-    """
-    # --- Seklima ---
-    try:
-        df_seklima = pd.read_csv(seklima_path, sep=';')
-    except FileNotFoundError:
-        raise RuntimeError(f"Kan ikke finne Seklima‐filen: {seklima_path}")
-    except Exception as e:
-        raise RuntimeError(f"Feilet ved lesing av Seklima: {e}")
-
-    # Parse dato og tid til datetime:
-    df_seklima['Middeltemperatur (1 t)'] = (
-        df_seklima['Middeltemperatur (1 t)'].astype(str).str.replace(",", ".")
-    )
-    df_seklima['tidspunkt'] = pd.to_datetime(
-        df_seklima['Tid(norsk normaltid)'],
-        format="%d.%m.%Y %H:%M",
-        errors='coerce'
-    )
-    df_seklima.set_index('tidspunkt', inplace=True)
-
-    df_seklima['utetemp_seklima'] = pd.to_numeric(
-        df_seklima['Middeltemperatur (1 t)'], errors='coerce'
-    )
-    df_seklima['ute_rh_seklima'] = pd.to_numeric(
-        df_seklima['Midlere relativ luftfuktighet (1 t)'], errors='coerce'
-    )
-    df_seklima = df_seklima[['utetemp_seklima', 'ute_rh_seklima']]
-
-    # --- Kunak ---
-    try:
-        df_kunak = pd.read_csv(kunak_path, sep=';')
-    except FileNotFoundError:
-        raise RuntimeError(f"Kan ikke finne Kunak‐filen: {kunak_path}")
-    except Exception as e:
-        raise RuntimeError(f"Feilet ved lesing av Kunak: {e}")
-
-    df_kunak['Datetime'] = pd.to_datetime(
-        df_kunak['Datetime'], format="%Y-%m-%d %H:%M:%S", errors='coerce'
-    )
-    df_kunak.set_index('Datetime', inplace=True)
-    df_kunak['utetemp_kunak'] = pd.to_numeric(
-        df_kunak['Temp ext (C)'].astype(str).str.replace(",", "."), errors='coerce'
-    )
-    df_kunak['ute_rh_kunak'] = pd.to_numeric(
-        df_kunak['Humidity ext (%)'].astype(str).str.replace(",", "."), errors='coerce'
-    )
-    df_kunak = df_kunak[['utetemp_kunak', 'ute_rh_kunak']]
-
-    # --- Slå sammen Seklima + Kunak på tidsindeks (outer join) ---
-    df_combined = pd.merge(
-        df_seklima, df_kunak,
-        how='outer', left_index=True, right_index=True
-    )
-    df_combined.sort_index(inplace=True)
-    return df_combined
-
-
-def filter_weather(df_weather: pd.DataFrame, mode: str = "year", year: Optional[int] = None, month: Optional[int] = None, week: Optional[int] = None,
-                        day: Optional[pd.Timestamp] = None) -> pd.DataFrame:
-    """
-    Filtrerer værdata til samme periode‐logikk som innendørs‐data.
-    Returnerer en ny DataFrame (eller tom DataFrame hvis ingen treff).
-    """
-    # Hent filter‐funksjonen fra oss selv (unngå sirkulær import til plot):
-    filtered_list = filter_data([df_weather], mode, year, month, week, day)
-    if filtered_list:
-        return filtered_list[0]
-    return pd.DataFrame()
+def convert_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Konverter målekolonner til tall og håndter både punktum og komma."""
+    converted = df.copy()
+    for column in converted.columns:
+        converted[column] = pd.to_numeric(
+            converted[column].astype(str).str.replace(",", ".", regex=False),
+            errors="coerce",
+        )
+    return converted
 
 
 def set_datetime_index(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Tar en inneklima‐DataFrame (slik den ser ut rett etter pd.read_csv), og gjør:
-      1) Kombinerer kolonne0='Date' + kolonne1='Time' til én DatetimeIndex
-      2) Fjerner kolonnene ['Date', 'Time', 'Virus Index']
-      3) Oversetter engelske kolonnenavn til norske (Temperatur, Luftfuktighet, …)
-      4) Resampler til times‐gjennomsnitt (dropper kun rader som er 100% NaN)
-      5) Returnerer den nye DataFrame med datetime‐indeks og norske kolonnenavn
+    """Standardiser inneklimadata før analyse.
 
-    Eksempel‐input‐rader:
-      Date;Time;Ventilation Indicator;IAQ Indicator;Virus Index;thermalIndicator;Temperature (°C);Humidity (%);CO2 (ppm);…
-      2023-07-06;09:50:54;3.00;77.00;3.00;;18.80;62.00;;10.00;0.00;1.00;1.00;1.00;1.00
+    Behandling:
+    - Date og Time kombineres til datetime-indeks.
+    - Ubrukte kolonner fjernes.
+    - Kolonnenavn oversettes til norske rapportnavn.
+    - Måleverdier konverteres til numeriske verdier.
+    - Data resamples til timesmiddel.
     """
-    # 1) Parse dato + tid til datetime
-    try:
-        df.index = pd.to_datetime(
-            df.iloc[:, 0] + ' ' + df.iloc[:, 1],
+    processed = df.copy()
+
+    if not isinstance(processed.index, pd.DatetimeIndex):
+        timestamp = pd.to_datetime(
+            processed.iloc[:, 0].astype(str) + " " + processed.iloc[:, 1].astype(str),
             format="%Y-%m-%d %H:%M:%S",
-            errors='coerce'
+            errors="coerce",
         )
-        n_invalid = df.index.isna().sum()
-        if n_invalid > 0:
-            print(f"⚠️  {n_invalid} rader hadde ugyldig dato/tid og ble satt til NaT")
-    except Exception as e:
-        print(f"❌ Feil ved parsing av datetime: {e}")
+        processed.index = timestamp
 
-    # 2) Fjern kolonner som vi ikke bruker videre:
-    for col in ['Date', 'Time', 'Virus Index']:
-        if col in df.columns:
-            df.drop(columns=col, inplace=True)
+    processed = processed[~processed.index.isna()].copy()
 
-    # 3) Oversett kolonnenavn fra engelsk til norsk
-    kolonneoversettelser = {
-        "Temperature (°C)":        "Temperatur (°C)",
-        "Humidity (%)":            "Luftfuktighet (%)",
-        "Formaldehyde (µg/m³)":    "Formaldehyd (µg/m³)",
-        "TVOC (ppb)":              "TVOC (ppb)",
-        "PM 1.0 (µg/m³)":          "PM 1.0 (µg/m³)",
-        "PM 2.5 (µg/m³)":          "PM 2.5 (µg/m³)",
-        "PM 4.0 (µg/m³)":          "PM 4.0 (µg/m³)",
-        "PM 10 (µg/m³)":           "PM 10 (µg/m³)",
-        "CO2 (ppm)":               "CO2 (ppm)"
-    }
-    df.rename(columns=kolonneoversettelser, inplace=True)
-    df.sort_index(inplace=True)
+    for column in ["Date", "Time", "Virus Index"]:
+        if column in processed.columns:
+            processed.drop(columns=column, inplace=True)
 
-    # 4) Times‐resample og dropp rader som ikke har *noen* data (dropna(how="all"))
-    df = df.resample("1h").mean().dropna(how="all")
-    return df
+    processed.rename(columns=COLUMN_TRANSLATIONS, inplace=True)
+    processed = convert_numeric_columns(processed)
+    processed.sort_index(inplace=True)
+
+    # Timesmiddel gjør at rom og bygg kan sammenlignes på samme tidsoppløsning.
+    return processed.resample("1h").mean().dropna(how="all")
 
 
-def filter_data(df_list: List[pd.DataFrame], mode: str = "year", year: Optional[int] = None, month: Optional[int] = None,week: Optional[int] = None,
-                    day: Optional[pd.Timestamp] = None) -> List[pd.DataFrame]:
-    """
-    Filtrerer en liste av DataFrames basert på 'mode':
-      - 'all'    → returneres akkurat som df_list
-      - 'year'   → beholder rader der df.index.year == year
-      - 'month'  → beholder (år == year) & (måned == month)
-      - 'week'   → beholder isocalendar.week == week  (årskryssende uke håndtert av pandas)
-      - 'day'    → beholder eksakt dato (Year-Month-Day)
-      - "' → okt–des i year OR jan–mars i year+1
-      - 'spring' → april–september i year
-    Hver filtrert DataFrame blir lagt i resultatlista, men tomme DataFrames kastes.
+def fetch_weather(seklima_path: Path = SEKLIMA_FILE, kunak_path: Path = KUNAK_FILE) -> pd.DataFrame:
+    """Les og kombiner uteklima fra Seklima og Kunak."""
+    try:
+        seklima = pd.read_csv(seklima_path, sep=";")
+    except FileNotFoundError as error:
+        raise RuntimeError(f"Kan ikke finne Seklima-filen: {seklima_path}") from error
 
-    Returnerer:
-      - List med filtrerte DataFrames (kun de som ikke er tomme etter filteret)
+    seklima["tidspunkt"] = pd.to_datetime(
+        seklima["Tid(norsk normaltid)"],
+        format="%d.%m.%Y %H:%M",
+        errors="coerce",
+    )
+    seklima.set_index("tidspunkt", inplace=True)
+    seklima["utetemp_seklima"] = pd.to_numeric(
+        seklima["Middeltemperatur (1 t)"].astype(str).str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+    seklima["ute_rh_seklima"] = pd.to_numeric(
+        seklima["Midlere relativ luftfuktighet (1 t)"].astype(str).str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+    seklima = seklima[["utetemp_seklima", "ute_rh_seklima"]]
+
+    try:
+        kunak = pd.read_csv(kunak_path, sep=";")
+    except FileNotFoundError as error:
+        raise RuntimeError(f"Kan ikke finne Kunak-filen: {kunak_path}") from error
+
+    kunak["Datetime"] = pd.to_datetime(kunak["Datetime"], format="%Y-%m-%d %H:%M:%S", errors="coerce")
+    kunak.set_index("Datetime", inplace=True)
+    kunak["utetemp_kunak"] = pd.to_numeric(
+        kunak["Temp ext (C)"].astype(str).str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+    kunak["ute_rh_kunak"] = pd.to_numeric(
+        kunak["Humidity ext (%)"].astype(str).str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+    kunak = kunak[["utetemp_kunak", "ute_rh_kunak"]]
+
+    weather = pd.merge(seklima, kunak, how="outer", left_index=True, right_index=True)
+    weather.sort_index(inplace=True)
+    return weather
+
+
+def filter_data(
+    df_list: List[pd.DataFrame],
+    mode: str = "all",
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    week: Optional[int] = None,
+    day: Optional[pd.Timestamp] = None,
+) -> List[pd.DataFrame]:
+    """Filtrer DataFrames til valgt periode.
+
+    Brukergrensesnittet tilbyr ikke kortere zoom enn uke, men day støttes fortsatt
+    for bakoverkompatibilitet og eventuell senere kontroll.
     """
     if not df_list:
         return []
 
     if mode == "all":
-        return df_list
+        return [df.copy() for df in df_list if not df.empty]
 
-    if mode in ["year", "fall", "spring"] and year is None:
-        raise ValueError(f"Må oppgi år for modus '{mode}'")
+    if mode in {"year", "month", "week", "fall", "spring"} and year is None:
+        raise ValueError(f"Må oppgi år for periodevalget '{mode}'.")
 
     filtered_list: List[pd.DataFrame] = []
+
     for df in df_list:
-        df_copy = df.copy()
+        filtered = df.copy()
+
         if mode == "year":
-            df_copy = df_copy[df_copy.index.year == year]
+            filtered = filtered[filtered.index.year == year]
         elif mode == "month":
-            df_copy = df_copy[(df_copy.index.year == year) & (df_copy.index.month == month)]
+            filtered = filtered[(filtered.index.year == year) & (filtered.index.month == month)]
         elif mode == "week":
-            df_copy = df_copy[
-                (df_copy.index.isocalendar().year == year) &
-                (df_copy.index.isocalendar().week == week)
-            ]
-        elif mode == "day":
-            df_copy = df_copy[
-                (df_copy.index.year == day.year) &
-                (df_copy.index.month == day.month) &
-                (df_copy.index.day == day.day)
-            ]
+            iso_calendar = filtered.index.isocalendar()
+            filtered = filtered[(iso_calendar.year == year) & (iso_calendar.week == week)]
+        elif mode == "day" and day is not None:
+            filtered = filtered[filtered.index.normalize() == pd.Timestamp(day).normalize()]
         elif mode == "spring":
             start = pd.Timestamp(year=year, month=1, day=6)
             end = pd.Timestamp(year=year, month=6, day=6) + pd.Timedelta(days=1)
-            df_copy = df_copy[(df_copy.index >= start) & (df_copy.index < end)]
-
+            filtered = filtered[(filtered.index >= start) & (filtered.index < end)]
         elif mode == "fall":
             start = pd.Timestamp(year=year, month=8, day=10)
             end = pd.Timestamp(year=year, month=12, day=10) + pd.Timedelta(days=1)
-            df_copy = df_copy[(df_copy.index >= start) & (df_copy.index < end)]
+            filtered = filtered[(filtered.index >= start) & (filtered.index < end)]
         else:
-            raise ValueError(f"Ukjent mode: '{mode}'")
+            raise ValueError(f"Ukjent periodevalg: {mode}")
 
-        if not df_copy.empty:
-            filtered_list.append(df_copy)
+        if not filtered.empty:
+            filtered_list.append(filtered)
 
     return filtered_list
 
+
+def filter_weather(
+    df_weather: pd.DataFrame,
+    mode: str = "all",
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    week: Optional[int] = None,
+    day: Optional[pd.Timestamp] = None,
+) -> pd.DataFrame:
+    """Filtrer uteklima med samme perioderegel som inneklima."""
+    filtered = filter_data([df_weather], mode=mode, year=year, month=month, week=week, day=day)
+    return filtered[0] if filtered else pd.DataFrame()
